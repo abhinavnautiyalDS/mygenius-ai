@@ -7,6 +7,12 @@ import streamlit as st
 import requests
 import uuid
 import time
+import os
+
+API_URL = os.getenv(
+    "API_URL",
+    "http://127.0.0.1:8000"
+)
 
 st.set_page_config(
     page_title="MyGenius AI",
@@ -326,6 +332,9 @@ section[data-testid="stSidebar"] .block-container {
     height: auto !important; text-align: left !important;
     transition: all 0.18s !important;
 }
+st.caption(
+    "Use your own Gemini API key or leave blank to use the hosted key."
+)
 .stButton > button:hover {
     background: rgba(99,102,241,0.07) !important;
     border-color: rgba(99,102,241,0.35) !important;
@@ -647,10 +656,15 @@ if query:
             status.info(f"{icon} {txt}")
             time.sleep(0.6)
         try:
-            resp   = requests.post(
-                "http://127.0.0.1:8000/ask",
-                data={"query": query, "session_id": st.session_state.session_id},
+            resp = requests.post(
+                f"{API_URL}/ask",
+                data={
+                    "query": query,
+                    "session_id": st.session_state.session_id,
+                    "api_key": api_key
+                },
                 timeout=300
+            )
             )
             answer = resp.json().get("response", "No response returned.")
         except Exception as e:
