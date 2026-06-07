@@ -96,10 +96,12 @@ def home():
 # Universal Chat Endpoint
 # ==========================================
 
+
 @app.post("/ask")
 def ask(
     query: str = Form(...),
-    session_id: str = Form("default")
+    session_id: str = Form("default"),
+    api_key: str = Form("")
 ):
 
     try:
