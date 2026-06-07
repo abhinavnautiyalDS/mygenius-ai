@@ -1,18 +1,11 @@
 # ==================================================
 # MyGenius AI  |  Financial Intelligence Copilot
-# Built by Abhinav Nautiyal
 # ==================================================
 
 import streamlit as st
 import requests
 import uuid
 import time
-import os
-
-API_URL = os.getenv(
-    "API_URL",
-    "http://127.0.0.1:8000"
-)
 
 st.set_page_config(
     page_title="MyGenius AI",
@@ -29,454 +22,464 @@ if "messages" not in st.session_state:
 if "quick_query" not in st.session_state:
     st.session_state.quick_query = None
 
-# ── Animated canvas background injected via components trick ──
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Sora:wght@700;800&display=swap');
 
-/* ── Reset & Base ── */
-*, *::before, *::after { box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body, .stApp {
-    background: #F0F4FF !important;
-    font-family: 'Inter', sans-serif;
-    color: #1E293B;
-    position: relative;
+html, body { background: #EEF0FF !important; }
+
+.stApp {
+    background: #EEF0FF !important;
+    font-family: 'DM Sans', sans-serif;
+    color: #18181B;
 }
 
-/* ── Kill Streamlit's black top toolbar ── */
-header[data-testid="stHeader"] {
-    background: rgba(240,244,255,0.85) !important;
-    backdrop-filter: blur(16px) !important;
-    border-bottom: 1px solid rgba(99,102,241,0.10) !important;
-}
-header[data-testid="stHeader"] * { color: #1E293B !important; }
-
-/* Hamburger / deploy button icons */
-[data-testid="stToolbar"] { background: transparent !important; }
-button[kind="header"] { color: #6366F1 !important; }
-
-/* ── Kill black bottom chat bar ── */
-[data-testid="stBottom"] {
-    background: rgba(240,244,255,0.88) !important;
-    backdrop-filter: blur(20px) !important;
-    border-top: 1px solid rgba(99,102,241,0.10) !important;
-}
-[data-testid="stBottom"] > div {
-    background: transparent !important;
-}
-
-/* ── Animated aurora canvas behind everything ── */
+/* Aurora Canvas */
 #aurora-canvas {
     position: fixed;
-    top: 0; left: 0;
-    width: 100vw; height: 100vh;
+    top: 0; left: 0; right: 0; bottom: 0;
     z-index: 0;
     pointer-events: none;
+    width: 100vw; height: 100vh;
 }
 
-/* Push Streamlit content above canvas */
 .stApp > * { position: relative; z-index: 1; }
-section[data-testid="stSidebar"] { z-index: 10 !important; }
-header[data-testid="stHeader"]   { z-index: 11 !important; }
-[data-testid="stBottom"]         { z-index: 11 !important; }
+section[data-testid="stSidebar"]  { z-index: 15 !important; }
+header[data-testid="stHeader"]    { z-index: 14 !important; }
+[data-testid="stBottom"]          { z-index: 14 !important; }
 
-.block-container { padding: 2rem 2.5rem 4rem !important; max-width: 1300px; }
+.block-container { padding: 1.5rem 2.5rem 3rem !important; max-width: 1400px; }
 
-/* ── Scrollbar ── */
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-track { background: #EEF2FF; }
-::-webkit-scrollbar-thumb { background: #C7D2FE; border-radius: 99px; }
-
-/* ═══════════════════════════════
-   SIDEBAR
-═══════════════════════════════ */
+/* ══════════════════════════════════════
+   SIDEBAR — strong contrast
+══════════════════════════════════════ */
 section[data-testid="stSidebar"] {
-    background: rgba(255,255,255,0.75) !important;
-    backdrop-filter: blur(20px) !important;
-    border-right: 1px solid rgba(99,102,241,0.12) !important;
+    background: #1E1B4B !important;
+    backdrop-filter: none !important;
+    border-right: 2px solid #3730A3 !important;
 }
 section[data-testid="stSidebar"] .block-container {
-    padding: 1.8rem 1.2rem !important;
+    padding: 1.25rem 0.875rem !important;
 }
 
-.sb-brand {
-    display: flex; align-items: center; gap: 11px;
-    padding: 14px 16px;
-    background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(168,85,247,0.06));
-    border: 1px solid rgba(99,102,241,0.15);
-    border-radius: 14px; margin-bottom: 28px;
+/* sidebar logo */
+.sb-logo {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px;
+    background: #312E81;
+    border: 1.5px solid #4F46E5;
+    border-radius: 12px;
+    margin-bottom: 20px;
 }
-.sb-brand .b-icon { font-size: 24px; }
-.sb-brand .b-title {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 15px; font-weight: 800;
-    background: linear-gradient(90deg, #6366F1, #A855F7);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+.sb-logo .text {
+    font-family: 'Sora', sans-serif;
+    font-size: 14px; font-weight: 800;
+    color: #FFFFFF;
+    letter-spacing: -0.3px;
 }
-.sb-brand .b-sub { font-size: 10px; color: #94A3B8; letter-spacing: 0.06em; margin-top: 2px; }
-
-.sb-label {
-    font-size: 10px; font-weight: 700; letter-spacing: 0.14em;
-    text-transform: uppercase; color: #CBD5E1;
-    margin: 22px 0 10px 2px;
-}
-
-.agent-row {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 13px;
-    background: rgba(255,255,255,0.6);
-    border: 1px solid rgba(99,102,241,0.1);
-    border-radius: 11px; margin-bottom: 7px;
-    font-size: 13px; color: #475569;
-    transition: border-color 0.2s, background 0.2s;
-}
-.agent-row:hover {
-    background: rgba(99,102,241,0.05);
-    border-color: rgba(99,102,241,0.25);
-}
-.agent-row .a-left { display: flex; align-items: center; gap: 9px; }
-.agent-row .dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: #22C55E; box-shadow: 0 0 6px #22C55E99;
-    animation: blink 2.4s ease-in-out infinite;
-}
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
-
-.sess-badge {
-    padding: 9px 13px;
-    background: rgba(255,255,255,0.5);
-    border: 1px solid rgba(99,102,241,0.1);
-    border-radius: 10px; font-size: 11px;
-    color: #94A3B8; font-family: monospace; margin-top: 6px;
+.sb-logo .sub {
+    font-size: 9px; color: #A5B4FC;
+    letter-spacing: 0.08em; margin-top: 2px;
+    font-family: 'DM Mono', monospace;
 }
 
-/* ── Text inputs in sidebar ── */
+/* sidebar section label */
+.sb-section {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: #A5B4FC;
+    margin: 20px 0 8px 2px;
+    display: flex; align-items: center; gap: 6px;
+}
+.sb-section::after {
+    content: '';
+    flex: 1; height: 1px;
+    background: #3730A3;
+}
+
+/* sidebar inputs */
 .stTextInput input {
-    background: rgba(255,255,255,0.7) !important;
-    border: 1px solid rgba(99,102,241,0.2) !important;
-    border-radius: 10px !important;
-    color: #1E293B !important;
-    font-family: 'Inter', sans-serif !important;
+    background: #312E81 !important;
+    border: 1.5px solid #4F46E5 !important;
+    border-radius: 9px !important;
+    color: #E0E7FF !important;
     font-size: 13px !important;
+    font-family: 'DM Sans', sans-serif !important;
 }
+.stTextInput input::placeholder { color: #818CF8 !important; }
 .stTextInput input:focus {
-    border-color: rgba(99,102,241,0.45) !important;
-    box-shadow: 0 0 0 3px rgba(99,102,241,0.08) !important;
-}
-[data-testid="stFileUploader"] {
-    background: rgba(255,255,255,0.5) !important;
-    border: 1px dashed rgba(99,102,241,0.2) !important;
-    border-radius: 12px !important;
+    border-color: #818CF8 !important;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.25) !important;
 }
 
-/* ═══════════════════════════════
+/* sidebar caption */
+section[data-testid="stSidebar"] .stCaption {
+    color: #818CF8 !important;
+    font-size: 11px !important;
+}
+
+/* file uploader */
+[data-testid="stFileUploader"] {
+    background: #312E81 !important;
+    border: 2px dashed #4F46E5 !important;
+    border-radius: 10px !important;
+    padding: 10px !important;
+}
+[data-testid="stFileUploader"] section { background: transparent !important; }
+[data-testid="stFileUploader"] * { color: #C7D2FE !important; }
+
+/* agent pills */
+.agent-pill {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 12px;
+    background: #312E81;
+    border: 1.5px solid #4338CA;
+    border-radius: 9px; margin-bottom: 6px;
+    font-size: 13px; font-weight: 500;
+    color: #E0E7FF;
+    transition: all 0.18s;
+}
+.agent-pill:hover {
+    background: #3730A3;
+    border-color: #818CF8;
+}
+.agent-pill .lft { display: flex; align-items: center; gap: 8px; }
+.agent-pill .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #34D399;
+    box-shadow: 0 0 6px #34D39999;
+    animation: blink 2.4s ease-in-out infinite;
+    flex-shrink: 0;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+.sess-id {
+    padding: 8px 12px;
+    background: #312E81;
+    border: 1.5px solid #4338CA;
+    border-radius: 9px;
+    font-size: 11px; color: #A5B4FC;
+    font-family: 'DM Mono', monospace;
+    margin-top: 4px;
+}
+
+/* ══════════════════════════════════════
+   HEADER / BOTTOM BAR
+══════════════════════════════════════ */
+header[data-testid="stHeader"] {
+    background: rgba(238,240,255,0.92) !important;
+    backdrop-filter: blur(16px) !important;
+    border-bottom: 1.5px solid #C7D2FE !important;
+}
+[data-testid="stToolbar"] { background: transparent !important; }
+
+[data-testid="stBottom"] {
+    background: rgba(238,240,255,0.96) !important;
+    backdrop-filter: blur(20px) !important;
+    border-top: 1.5px solid #C7D2FE !important;
+}
+
+/* ══════════════════════════════════════
    HERO
-═══════════════════════════════ */
+══════════════════════════════════════ */
 .hero {
     position: relative; overflow: hidden;
-    padding: 60px 48px;
-    border-radius: 24px;
-    background: rgba(255,255,255,0.55);
-    backdrop-filter: blur(24px);
-    border: 1px solid rgba(99,102,241,0.15);
+    padding: 52px 44px;
+    border-radius: 20px;
+    background: linear-gradient(145deg, #FFFFFF 0%, #EEF2FF 100%);
+    border: 2px solid #C7D2FE;
     text-align: center;
     margin-bottom: 24px;
-    box-shadow: 0 8px 40px rgba(99,102,241,0.08);
+    box-shadow: 0 4px 24px rgba(79,70,229,0.10), inset 0 1px 0 rgba(255,255,255,0.8);
 }
-.hero-glow-l {
-    position: absolute; top: -40px; left: -60px;
+.hero-glow1 {
+    position: absolute; top: -60px; left: -80px;
     width: 320px; height: 320px;
     background: radial-gradient(circle, rgba(99,102,241,0.18), transparent 70%);
     pointer-events: none;
 }
-.hero-glow-r {
-    position: absolute; bottom: -40px; right: -60px;
+.hero-glow2 {
+    position: absolute; bottom: -60px; right: -80px;
     width: 300px; height: 300px;
     background: radial-gradient(circle, rgba(168,85,247,0.14), transparent 70%);
     pointer-events: none;
 }
-.hero-pill {
+.hero-tag {
     display: inline-flex; align-items: center; gap: 6px;
-    padding: 5px 15px; border-radius: 99px;
-    border: 1px solid rgba(99,102,241,0.25);
-    background: rgba(99,102,241,0.07);
-    font-size: 11px; font-weight: 600; letter-spacing: 0.07em;
-    color: #6366F1; margin-bottom: 20px;
+    padding: 5px 14px; border-radius: 99px;
+    border: 1.5px solid #818CF8;
+    background: #EEF2FF;
+    font-size: 11px; font-weight: 700;
+    color: #4338CA;
+    margin-bottom: 16px;
+    letter-spacing: 0.02em;
 }
 .hero-title {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: clamp(46px, 5.5vw, 74px);
-    font-weight: 800; line-height: 1.05;
-    background: linear-gradient(135deg, #6366F1 0%, #A855F7 50%, #6366F1 100%);
+    font-family: 'Sora', sans-serif;
+    font-size: 68px; font-weight: 800; line-height: 1.05;
+    background: linear-gradient(135deg, #4338CA 0%, #7C3AED 55%, #4338CA 100%);
     background-size: 200% auto;
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    animation: shine 5s linear infinite;
-    margin-bottom: 12px;
+    animation: shimmer 5s linear infinite;
+    margin-bottom: 10px;
 }
-@keyframes shine { to { background-position: 200% center; } }
+@keyframes shimmer { to { background-position: 200% center; } }
 .hero-sub {
-    font-size: 17px; font-weight: 400;
-    color: #64748B; margin-bottom: 28px;
+    font-size: 17px; font-weight: 500;
+    color: #3730A3;
+    margin-bottom: 24px;
 }
 .hero-chips { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
 .hero-chip {
-    padding: 6px 14px; border-radius: 8px;
-    background: rgba(99,102,241,0.06);
-    border: 1px solid rgba(99,102,241,0.15);
-    font-size: 12px; color: #6366F1; font-weight: 500;
+    padding: 7px 15px; border-radius: 8px;
+    background: #EEF2FF;
+    border: 1.5px solid #818CF8;
+    font-size: 12px; font-weight: 600;
+    color: #3730A3;
 }
 
-/* ═══════════════════════════════
-   KPI CARDS
-═══════════════════════════════ */
+/* ══════════════════════════════════════
+   KPI CARDS — strong borders, high contrast
+══════════════════════════════════════ */
 .kpi {
-    background: rgba(255,255,255,0.65);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(99,102,241,0.12);
-    border-radius: 18px; padding: 22px 20px;
+    background: #FFFFFF;
+    border: 2px solid #C7D2FE;
+    border-radius: 16px; padding: 20px;
     transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
     position: relative; overflow: hidden;
+    box-shadow: 0 2px 10px rgba(79,70,229,0.08);
 }
 .kpi:hover {
-    transform: translateY(-4px);
-    border-color: rgba(99,102,241,0.3);
-    box-shadow: 0 12px 32px rgba(99,102,241,0.12);
+    transform: translateY(-3px);
+    border-color: #6366F1;
+    box-shadow: 0 8px 24px rgba(79,70,229,0.15);
 }
-.kpi::after {
-    content:''; position: absolute; top:0; left:0; right:0; height:2px;
-    background: linear-gradient(90deg, #6366F1, #A855F7);
-    opacity: 0; transition: opacity 0.2s;
+.kpi::before {
+    content:''; position: absolute; top:0; left:0; right:0; height:3px;
+    background: linear-gradient(90deg, #4F46E5, #7C3AED);
+    border-radius: 2px 2px 0 0;
 }
-.kpi:hover::after { opacity: 1; }
-.kpi-ico { font-size: 26px; margin-bottom: 10px; }
-.kpi-lbl {
-    font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
-    text-transform: uppercase; color: #94A3B8; margin-bottom: 5px;
+.kpi-icon { font-size: 22px; margin-bottom: 10px; }
+/* FIX: label is now dark and clearly visible */
+.kpi-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: #4338CA;
+    margin-bottom: 6px;
 }
-.kpi-val {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 28px; font-weight: 800; color: #1E293B; line-height: 1;
+/* FIX: value is bold and high contrast */
+.kpi-value {
+    font-family: 'Sora', sans-serif;
+    font-size: 26px; font-weight: 800;
+    color: #1E1B4B;
 }
-.kpi-note { font-size: 11px; color: #22C55E; margin-top: 6px; font-weight: 500; }
+.kpi-detail { font-size: 12px; color: #059669; margin-top: 6px; font-weight: 600; }
 
-/* ═══════════════════════════════
-   SECTION HEADING
-═══════════════════════════════ */
-.sh {
+/* ══════════════════════════════════════
+   SECTION HEADERS — visible & strong
+══════════════════════════════════════ */
+.section-head {
     display: flex; align-items: center; gap: 10px;
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 15px; font-weight: 700; color: #1E293B;
-    margin: 28px 0 16px;
+    font-family: 'Sora', sans-serif;
+    font-size: 15px; font-weight: 700;
+    color: #1E1B4B;
+    margin: 32px 0 16px;
 }
-.sh .sh-line {
-    flex: 1; height: 1px;
-    background: linear-gradient(90deg, rgba(99,102,241,0.2), transparent);
-}
-
-/* ═══════════════════════════════
-   ARCHITECTURE NODES
-═══════════════════════════════ */
-.an {
-    text-align: center; padding: 14px 10px;
-    border-radius: 12px; font-size: 13px; font-weight: 600;
-    line-height: 1.4; transition: transform 0.2s, box-shadow 0.2s;
-}
-.an:hover { transform: translateY(-2px); }
-.an-user {
-    background: rgba(99,102,241,0.08);
-    border: 1px solid rgba(99,102,241,0.25);
-    color: #6366F1;
-    box-shadow: 0 2px 12px rgba(99,102,241,0.08);
-}
-.an-router {
-    background: rgba(168,85,247,0.08);
-    border: 1px solid rgba(168,85,247,0.28);
-    color: #A855F7;
-    box-shadow: 0 2px 12px rgba(168,85,247,0.08);
-}
-.an-agent {
-    background: rgba(255,255,255,0.7);
-    border: 1px solid rgba(99,102,241,0.15);
-    color: #475569;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.04);
-}
-.an-llm {
-    background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(168,85,247,0.08));
-    border: 1px solid rgba(99,102,241,0.25);
-    color: #1E293B; font-weight: 700;
-    box-shadow: 0 4px 20px rgba(99,102,241,0.1);
-}
-.an-arrow {
-    display: flex; justify-content: center; align-items: center;
-    font-size: 18px; color: #C7D2FE; padding: 5px 0;
-}
-.an-label {
-    font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase;
-    color: #94A3B8; text-align: center; margin-top: 5px;
+.section-head .section-line {
+    flex: 1; height: 2px;
+    background: linear-gradient(90deg, #818CF8, transparent);
+    border-radius: 2px;
 }
 
-/* ═══════════════════════════════
-   QUICK ACTIONS
-═══════════════════════════════ */
+/* ══════════════════════════════════════
+   ARCHITECTURE — visible nodes
+══════════════════════════════════════ */
+.arch-wrapper {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 0;
+}
+.arch-node {
+    text-align: center; padding: 12px 10px;
+    border-radius: 11px; font-size: 13px; font-weight: 600;
+    transition: transform 0.2s; width: 100%;
+}
+.arch-node:hover { transform: translateY(-2px); }
+.arch-user {
+    background: #EEF2FF;
+    border: 2px solid #6366F1;
+    color: #3730A3;
+}
+.arch-router {
+    background: #F5F3FF;
+    border: 2px solid #7C3AED;
+    color: #5B21B6;
+}
+.arch-agent {
+    background: #FFFFFF;
+    border: 2px solid #C7D2FE;
+    color: #1E1B4B;
+    font-weight: 600;
+}
+.arch-llm {
+    background: linear-gradient(135deg, #EEF2FF, #F5F3FF);
+    border: 2px solid #6366F1;
+    color: #1E1B4B; font-weight: 700;
+    width: 100%;
+}
+.arch-arrow { text-align: center; color: #6366F1; padding: 4px 0; font-size: 20px; font-weight: 700; width: 100%; }
+.arch-label { font-size: 11px; text-transform: uppercase; font-weight: 600; color: #6366F1; text-align: center; width: 100%; margin-bottom: 2px; letter-spacing: 0.06em; }
+
+/* ══════════════════════════════════════
+   QUICK ACTION BUTTONS
+══════════════════════════════════════ */
 .stButton > button {
     width: 100% !important;
-    background: rgba(255,255,255,0.65) !important;
-    backdrop-filter: blur(12px) !important;
-    color: #475569 !important;
-    border: 1px solid rgba(99,102,241,0.15) !important;
-    border-radius: 12px !important;
-    padding: 13px 15px !important;
-    font-family: 'Inter', sans-serif !important;
-    font-size: 13px !important; font-weight: 500 !important;
-    height: auto !important; text-align: left !important;
+    background: #FFFFFF !important;
+    color: #1E1B4B !important;
+    border: 2px solid #C7D2FE !important;
+    border-radius: 11px !important;
+    padding: 12px 14px !important;
+    font-family: 'DM Sans', sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    height: auto !important;
+    text-align: left !important;
     transition: all 0.18s !important;
+    box-shadow: 0 1px 4px rgba(79,70,229,0.07) !important;
 }
-st.caption(
-    "Use your own Gemini API key or leave blank to use the hosted key."
-)
 .stButton > button:hover {
-    background: rgba(99,102,241,0.07) !important;
-    border-color: rgba(99,102,241,0.35) !important;
-    color: #6366F1 !important;
+    background: #EEF2FF !important;
+    border-color: #6366F1 !important;
+    color: #3730A3 !important;
     transform: translateY(-2px) !important;
-    box-shadow: 0 6px 20px rgba(99,102,241,0.12) !important;
+    box-shadow: 0 6px 16px rgba(79,70,229,0.13) !important;
 }
 
-/* ═══════════════════════════════
+/* ══════════════════════════════════════
    CHAT
-═══════════════════════════════ */
+══════════════════════════════════════ */
 .stChatMessage { background: transparent !important; }
 [data-testid="stChatMessageContent"] {
-    background: rgba(255,255,255,0.7) !important;
-    backdrop-filter: blur(12px) !important;
-    border: 1px solid rgba(99,102,241,0.12) !important;
-    border-radius: 14px !important;
-    padding: 14px 17px !important;
+    background: #FFFFFF !important;
+    border: 2px solid #C7D2FE !important;
+    border-radius: 13px !important;
+    padding: 14px 16px !important;
     font-size: 14px !important; line-height: 1.75 !important;
-    color: #1E293B !important;
-    box-shadow: 0 2px 10px rgba(99,102,241,0.05) !important;
+    color: #18181B !important;
+    box-shadow: 0 1px 6px rgba(79,70,229,0.07) !important;
 }
+/* FIX: chat input matches light theme */
 [data-testid="stChatInput"] {
-    background: rgba(255,255,255,0.7) !important;
-    border: 1px solid rgba(99,102,241,0.2) !important;
-    border-radius: 16px !important;
-    backdrop-filter: blur(12px) !important;
+    background: #FFFFFF !important;
+    border: 2px solid #818CF8 !important;
+    border-radius: 14px !important;
+    box-shadow: 0 2px 12px rgba(79,70,229,0.10) !important;
 }
 [data-testid="stChatInput"] textarea {
-    color: #1E293B !important;
-    font-family: 'Inter', sans-serif !important;
+    color: #18181B !important;
+    font-family: 'DM Sans', sans-serif !important;
     font-size: 14px !important;
+    background: transparent !important;
+}
+[data-testid="stChatInput"] textarea::placeholder {
+    color: #6366F1 !important;
+    font-weight: 500 !important;
 }
 
-/* ═══════════════════════════════
+/* ══════════════════════════════════════
    ALERTS
-═══════════════════════════════ */
+══════════════════════════════════════ */
 .stAlert {
-    border-radius: 12px !important;
-    font-family: 'Inter', sans-serif !important;
+    border-radius: 11px !important;
+    border: 1.5px solid #C7D2FE !important;
+    background: #FFFFFF !important;
     font-size: 13px !important;
+    color: #1E1B4B !important;
 }
 
-/* ═══════════════════════════════
+/* ══════════════════════════════════════
    FOOTER
-═══════════════════════════════ */
-.stack { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; margin-top: 12px; }
-.stack-b {
-    padding: 4px 11px; border-radius: 6px;
-    background: rgba(99,102,241,0.06);
-    border: 1px solid rgba(99,102,241,0.15);
-    font-size: 11px; font-weight: 500; color: #6366F1;
+══════════════════════════════════════ */
+.stack { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; margin-top: 14px; }
+.stack-badge {
+    display: inline-block;
+    padding: 5px 13px; border-radius: 7px;
+    background: #EEF2FF;
+    border: 1.5px solid #818CF8;
+    font-size: 11px; font-weight: 700;
+    color: #3730A3;
+    letter-spacing: 0.02em;
 }
-.ft {
-    text-align: center; padding: 36px 20px 16px;
-    border-top: 1px solid rgba(99,102,241,0.1);
-    margin-top: 3rem;
+.footer {
+    text-align: center; padding: 32px 20px 14px;
+    border-top: 2px solid #C7D2FE;
+    margin-top: 2.5rem;
 }
-.ft-brand {
-    font-family: 'Plus Jakarta Sans', sans-serif;
+.footer-title {
+    font-family: 'Sora', sans-serif;
     font-size: 18px; font-weight: 800;
-    background: linear-gradient(90deg, #6366F1, #A855F7);
+    background: linear-gradient(90deg, #4338CA, #7C3AED);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     margin-bottom: 4px;
 }
-.ft-sub { font-size: 12px; color: #94A3B8; }
-.ft-credit { font-size: 11px; color: #CBD5E1; margin-top: 14px; }
+.footer-sub { font-size: 13px; color: #4338CA; font-weight: 500; }
+.footer-credit { font-size: 11px; color: #818CF8; margin-top: 10px; font-weight: 500; }
 
-hr { border: none !important; border-top: 1px solid rgba(99,102,241,0.1) !important; }
+hr { border: none !important; border-top: 2px solid #C7D2FE !important; }
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #818CF8; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #4F46E5; }
 </style>
 
-<!-- ── Floating orbs aurora animation ── -->
 <canvas id="aurora-canvas"></canvas>
 <script>
 (function(){
   const canvas = document.getElementById('aurora-canvas');
   if(!canvas) return;
   const ctx = canvas.getContext('2d');
-
-  function resize(){
-    canvas.width  = window.innerWidth;
-    canvas.height = window.innerHeight;
-  }
-  resize();
-  window.addEventListener('resize', resize);
-
-  // Orbs
-  const orbs = [
-    { x:0.15, y:0.20, r:340, hue:245, speed:0.00018, phase:0.0  },
-    { x:0.75, y:0.15, r:280, hue:270, speed:0.00022, phase:1.8  },
-    { x:0.50, y:0.65, r:300, hue:220, speed:0.00015, phase:3.3  },
-    { x:0.85, y:0.70, r:240, hue:255, speed:0.00025, phase:5.1  },
-    { x:0.10, y:0.80, r:200, hue:280, speed:0.00020, phase:2.5  },
+  function resize(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
+  resize(); window.addEventListener('resize', resize);
+  const orbs=[
+    {x:0.15,y:0.20,r:340,hue:245,speed:0.00018,phase:0.0},
+    {x:0.75,y:0.15,r:280,hue:260,speed:0.00022,phase:1.8},
+    {x:0.50,y:0.65,r:300,hue:230,speed:0.00015,phase:3.3},
+    {x:0.85,y:0.70,r:240,hue:250,speed:0.00025,phase:5.1},
+    {x:0.10,y:0.80,r:200,hue:270,speed:0.00020,phase:2.5},
   ];
-
-  // Floating particles
-  const particles = Array.from({length: 55}, () => ({
-    x: Math.random(),
-    y: Math.random(),
-    size: Math.random() * 2.5 + 0.5,
-    speed: Math.random() * 0.00008 + 0.00003,
-    phase: Math.random() * Math.PI * 2,
-    opacity: Math.random() * 0.35 + 0.08,
-    hue: 230 + Math.random() * 60,
+  const particles=Array.from({length:40},()=>({
+    x:Math.random(),y:Math.random(),
+    size:Math.random()*2+0.5,
+    speed:Math.random()*0.00007+0.00003,
+    phase:Math.random()*Math.PI*2,
+    opacity:Math.random()*0.25+0.06,
+    hue:230+Math.random()*50,
   }));
-
-  let t = 0;
+  let t=0;
   function draw(){
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Background base
-    ctx.fillStyle = '#F0F4FF';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Orbs
-    orbs.forEach(o => {
-      const cx = (o.x + 0.06 * Math.sin(t * o.speed * 1000 + o.phase)) * canvas.width;
-      const cy = (o.y + 0.05 * Math.cos(t * o.speed * 800  + o.phase)) * canvas.height;
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, o.r);
-      grad.addColorStop(0,   `hsla(${o.hue},85%,70%,0.22)`);
-      grad.addColorStop(0.4, `hsla(${o.hue},75%,65%,0.10)`);
-      grad.addColorStop(1,   `hsla(${o.hue},70%,60%,0.00)`);
-      ctx.beginPath();
-      ctx.arc(cx, cy, o.r, 0, Math.PI * 2);
-      ctx.fillStyle = grad;
-      ctx.fill();
-      o.phase += o.speed;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle='#EEF0FF'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    orbs.forEach(o=>{
+      const cx=(o.x+0.06*Math.sin(t*o.speed*1000+o.phase))*canvas.width;
+      const cy=(o.y+0.05*Math.cos(t*o.speed*800+o.phase))*canvas.height;
+      const g=ctx.createRadialGradient(cx,cy,0,cx,cy,o.r);
+      g.addColorStop(0,`hsla(${o.hue},80%,72%,0.18)`);
+      g.addColorStop(0.4,`hsla(${o.hue},70%,68%,0.08)`);
+      g.addColorStop(1,`hsla(${o.hue},65%,65%,0.00)`);
+      ctx.beginPath(); ctx.arc(cx,cy,o.r,0,Math.PI*2);
+      ctx.fillStyle=g; ctx.fill();
     });
-
-    // Floating sparkles
-    particles.forEach(p => {
-      const px = (p.x + 0.04 * Math.sin(t * p.speed * 1200 + p.phase)) * canvas.width;
-      const py = (p.y + 0.03 * Math.cos(t * p.speed * 900  + p.phase)) * canvas.height;
-      const pulse = p.opacity * (0.6 + 0.4 * Math.sin(t * p.speed * 2000 + p.phase));
-      ctx.beginPath();
-      ctx.arc(px, py, p.size, 0, Math.PI * 2);
-      ctx.fillStyle = `hsla(${p.hue},80%,60%,${pulse})`;
-      ctx.fill();
+    particles.forEach(p=>{
+      const px=(p.x+0.04*Math.sin(t*p.speed*1200+p.phase))*canvas.width;
+      const py=(p.y+0.03*Math.cos(t*p.speed*900+p.phase))*canvas.height;
+      const pulse=p.opacity*(0.6+0.4*Math.sin(t*p.speed*2000+p.phase));
+      ctx.beginPath(); ctx.arc(px,py,p.size,0,Math.PI*2);
+      ctx.fillStyle=`hsla(${p.hue},75%,55%,${pulse})`; ctx.fill();
     });
-
-    t += 16;
-    requestAnimationFrame(draw);
+    t+=16; requestAnimationFrame(draw);
   }
   draw();
 })();
@@ -488,56 +491,41 @@ hr { border: none !important; border-top: 1px solid rgba(99,102,241,0.1) !import
 # ═══════════════════════════════════════════════════
 with st.sidebar:
     st.markdown("""
-    <div class="sb-brand">
-        <div class="b-icon">🚀</div>
+    <div class="sb-logo">
+        <div style="font-size:22px">🚀</div>
         <div>
-            <div class="b-title">MyGenius AI</div>
-            <div class="b-sub">FINANCIAL COPILOT v2.0</div>
+            <div class="text">MyGenius AI</div>
+            <div class="sub">FINANCIAL COPILOT v2.0</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="sb-label">API Configuration</div>', unsafe_allow_html=True)
-    api_key = st.text_input(
-        "Gemini API Key", type="password",
-        placeholder="Enter Gemini API key…",
-        label_visibility="collapsed"
-    )
-    st.caption("🔒 Stored in session only")
+    st.markdown('<div class="sb-section">⚙️ API Config</div>', unsafe_allow_html=True)
+    api_key = st.text_input("Gemini API Key", type="password", placeholder="Enter your API key…", label_visibility="collapsed")
+    st.caption("🔒 Session-only storage")
 
-    st.markdown('<div class="sb-label">Document</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sb-section">📄 Documents</div>', unsafe_allow_html=True)
     uploaded_file = st.file_uploader("Upload PDF", type=["pdf"], label_visibility="collapsed")
     if uploaded_file:
-        st.success(f"📄 {uploaded_file.name} — ready for RAG")
+        st.success(f"✓ {uploaded_file.name} loaded")
 
-    st.markdown('<div class="sb-label">Agent Status</div>', unsafe_allow_html=True)
-    agents = [
-        ("🤖", "Chatbot Agent"),
-        ("📈", "Finance Agent"),
-        ("🗄️", "SQL Agent"),
-        ("📚", "RAG Agent"),
-        ("📝", "Summarizer"),
-    ]
+    st.markdown('<div class="sb-section">🟢 Agent Status</div>', unsafe_allow_html=True)
+    agents = [("🤖", "Chatbot Agent"), ("📈", "Finance Agent"), ("🗄️", "SQL Agent"), ("📚", "RAG Agent"), ("📝", "Summarizer")]
     for icon, name in agents:
-        st.markdown(f"""
-        <div class="agent-row">
-            <div class="a-left"><span>{icon}</span><span>{name}</span></div>
-            <span class="dot"></span>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f'<div class="agent-pill"><div class="lft"><span>{icon}</span><span>{name}</span></div><span class="dot"></span></div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="sb-label">Session</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sb-section">🔑 Session</div>', unsafe_allow_html=True)
     sid = st.session_state.session_id[:8]
-    st.markdown(f'<div class="sess-badge">ID: {sid}…</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="sess-id">{sid}…</div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════
 # HERO
 # ═══════════════════════════════════════════════════
 st.markdown("""
 <div class="hero">
-  <div class="hero-glow-l"></div>
-  <div class="hero-glow-r"></div>
-  <div class="hero-pill">✦ &nbsp;Powered by Gemini 2.5 Flash</div>
+  <div class="hero-glow1"></div>
+  <div class="hero-glow2"></div>
+  <div class="hero-tag">✦ Powered by Gemini 2.5 Flash</div>
   <div class="hero-title">MyGenius AI</div>
   <div class="hero-sub">Your Financial Intelligence Copilot</div>
   <div class="hero-chips">
@@ -553,97 +541,89 @@ st.markdown("""
 # ═══════════════════════════════════════════════════
 # KPI CARDS
 # ═══════════════════════════════════════════════════
-k1, k2, k3, k4 = st.columns(4)
-kpi_data = [
+k1, k2, k3, k4 = st.columns(4, gap="small")
+kpis = [
     (k1, "🤖", "Active Agents", "5",      "● All online"),
     (k2, "⚡", "AI Model",      "Gemini",  "↑ 2.5 Flash"),
     (k3, "🧭", "Router",        "AI",      "↑ Intent-aware"),
     (k4, "📂", "Documents",     "Ready",   "● FAISS indexed"),
 ]
-for col, ico, lbl, val, note in kpi_data:
+for col, ico, lbl, val, detail in kpis:
     with col:
-        st.markdown(f"""
-        <div class="kpi">
-          <div class="kpi-ico">{ico}</div>
-          <div class="kpi-lbl">{lbl}</div>
-          <div class="kpi-val">{val}</div>
-          <div class="kpi-note">{note}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi"><div class="kpi-icon">{ico}</div><div class="kpi-label">{lbl}</div><div class="kpi-value">{val}</div><div class="kpi-detail">{detail}</div></div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════
 # ARCHITECTURE
 # ═══════════════════════════════════════════════════
-st.markdown('<div class="sh">🧠 Multi-Agent Architecture <div class="sh-line"></div></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-head">🧠 Multi-Agent Architecture<div class="section-line"></div></div>', unsafe_allow_html=True)
 
-_, mid, _ = st.columns([2, 3, 2])
-with mid:
-    st.markdown('<div class="an an-user">👤 &nbsp; User Query</div>', unsafe_allow_html=True)
+_, arch_mid, _ = st.columns([1.5, 2, 1.5])
+with arch_mid:
+    st.markdown("""
+    <div class="arch-wrapper">
+        <div class="arch-node arch-user">👤 &nbsp; User Query</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-node arch-router">🧭 &nbsp; Router Agent</div>
+        <div class="arch-label" style="margin-top:4px">Route to specialist</div>
+        <div class="arch-arrow">↓</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-_, mid, _ = st.columns([2, 3, 2])
-with mid:
-    st.markdown('<div class="an-arrow">↓</div>', unsafe_allow_html=True)
-
-_, mid, _ = st.columns([2, 3, 2])
-with mid:
-    st.markdown('<div class="an an-router">🧭 &nbsp; Router Agent</div>', unsafe_allow_html=True)
-    st.markdown('<div class="an-label">selects the right specialist</div>', unsafe_allow_html=True)
-
-_, mid, _ = st.columns([2, 3, 2])
-with mid:
-    st.markdown('<div class="an-arrow">↓</div>', unsafe_allow_html=True)
-
-a1, a2, a3, a4 = st.columns(4)
-for col, ico, lbl in [(a1,"📈","Finance Agent"),(a2,"🗄️","SQL Agent"),(a3,"📚","RAG Agent"),(a4,"📝","Summarizer")]:
+a1, a2, a3, a4 = st.columns(4, gap="small")
+for col, ico, lbl in [(a1,"📈","Finance"),(a2,"🗄️","SQL"),(a3,"📚","RAG"),(a4,"📝","Summarize")]:
     with col:
-        st.markdown(f'<div class="an an-agent">{ico}<br>{lbl}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="arch-node arch-agent">{ico}<br><span style="font-size:11px;color:#4338CA;font-weight:700">{lbl}</span></div>', unsafe_allow_html=True)
 
-_, mid, _ = st.columns([2, 3, 2])
-with mid:
-    st.markdown('<div class="an-arrow">↓</div>', unsafe_allow_html=True)
-
-_, mid, _ = st.columns([2, 3, 2])
-with mid:
-    st.markdown('<div class="an an-llm">⚡ &nbsp; Gemini 2.5 Flash</div>', unsafe_allow_html=True)
+_, arch_mid2, _ = st.columns([1.5, 2, 1.5])
+with arch_mid2:
+    st.markdown("""
+    <div class="arch-wrapper">
+        <div class="arch-arrow">↓</div>
+        <div class="arch-node arch-llm">⚡ &nbsp; Gemini 2.5 Flash</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════
 # QUICK ACTIONS
 # ═══════════════════════════════════════════════════
-st.markdown('<div class="sh">⚡ Quick Actions <div class="sh-line"></div></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-head">⚡ Quick Actions<div class="section-line"></div></div>', unsafe_allow_html=True)
 
-quick_actions = [
-    ("📈  Explain EMI",           "Explain EMI"),
-    ("📊  SIP vs FD",             "Compare SIP vs FD"),
-    ("📄  Summarize Report",      "Summarize annual report"),
-    ("🗄️  Show All Customers",    "Show all customers"),
-    ("💰  Balance Sheet",         "Analyze balance sheet"),
-    ("📉  Risk Analysis",         "Perform risk analysis"),
+qa_buttons = [
+    ("📈 Explain EMI",       "Explain EMI"),
+    ("📊 SIP vs FD",         "Compare SIP vs FD"),
+    ("📄 Summarize Report",  "Summarize annual report"),
+    ("🗄️ Show Customers",   "Show all customers"),
+    ("💰 Balance Sheet",     "Analyze balance sheet"),
+    ("📉 Risk Analysis",     "Perform risk analysis"),
 ]
 
-r1 = st.columns(3)
-r2 = st.columns(3)
-rows = [r1, r1, r1, r2, r2, r2]
-for i, (label, payload) in enumerate(quick_actions):
-    with rows[i][i % 3]:
+r1 = st.columns(3, gap="small")
+r2 = st.columns(3, gap="small")
+for i, (label, payload) in enumerate(qa_buttons):
+    row = r1 if i < 3 else r2
+    with row[i % 3]:
         if st.button(label, key=f"qa_{i}"):
             st.session_state.quick_query = payload
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════
-# CHAT WORKSPACE
+# CHAT
 # ═══════════════════════════════════════════════════
-st.markdown('<div class="sh">💬 Chat Workspace <div class="sh-line"></div></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-head">💬 Chat Workspace<div class="section-line"></div></div>', unsafe_allow_html=True)
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-active_query = st.session_state.pop("quick_query", None)
-user_input   = st.chat_input("Ask MyGenius AI anything…")
-query        = user_input or active_query
+active_query = st.session_state.get("quick_query", None)
+if active_query:
+    del st.session_state["quick_query"]
+
+user_input = st.chat_input("Ask MyGenius AI anything…")
+query = user_input or active_query
 
 if query:
     st.session_state.messages.append({"role": "user", "content": query})
@@ -652,24 +632,20 @@ if query:
 
     with st.chat_message("assistant"):
         status = st.empty()
-        for icon, txt in [("🔍","Analyzing intent…"),("🧭","Routing to agent…"),("⚡","Generating response…")]:
+        for icon, txt in [("🔍", "Analyzing intent…"), ("🧭", "Routing to agent…"), ("⚡", "Generating…")]:
             status.info(f"{icon} {txt}")
-            time.sleep(0.6)
+            time.sleep(0.5)
         try:
             resp = requests.post(
-                f"{API_URL}/ask",
-                data={
-                    "query": query,
-                    "session_id": st.session_state.session_id,
-                    "api_key": api_key
-                },
+                "http://127.0.0.1:8000/ask",
+                data={"query": query, "session_id": st.session_state.session_id},
                 timeout=300
             )
-            )
-            answer = resp.json().get("response", "No response returned.")
+            answer = resp.json().get("response", "No response.")
         except Exception as e:
-            answer = f"❌ Backend Error: {e}"
-        status.empty()
+            answer = f"❌ Error: {e}"
+        finally:
+            status.empty()
         st.markdown(answer)
 
     st.session_state.messages.append({"role": "assistant", "content": str(answer)})
@@ -678,17 +654,17 @@ if query:
 # FOOTER
 # ═══════════════════════════════════════════════════
 st.markdown("""
-<div class="ft">
-  <div class="ft-brand">🚀 MyGenius AI</div>
-  <div class="ft-sub">Financial Intelligence Copilot</div>
+<div class="footer">
+  <div class="footer-title">🚀 MyGenius AI</div>
+  <div class="footer-sub">Financial Intelligence Copilot</div>
   <div class="stack">
-    <span class="stack-b">Gemini 2.5 Flash</span>
-    <span class="stack-b">LangChain</span>
-    <span class="stack-b">LangGraph</span>
-    <span class="stack-b">FAISS</span>
-    <span class="stack-b">FastAPI</span>
-    <span class="stack-b">Streamlit</span>
+    <span class="stack-badge">Gemini 2.5 Flash</span>
+    <span class="stack-badge">LangChain</span>
+    <span class="stack-badge">LangGraph</span>
+    <span class="stack-badge">FAISS</span>
+    <span class="stack-badge">FastAPI</span>
+    <span class="stack-badge">Streamlit</span>
   </div>
-  <div class="ft-credit">Built by Abhinav Nautiyal</div>
+  <div class="footer-credit">Built by Abhinav Nautiyal</div>
 </div>
 """, unsafe_allow_html=True)
