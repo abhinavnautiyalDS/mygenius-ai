@@ -1,8 +1,7 @@
-# 🚀 MyGenius AI
+#  MyGenius AI : A Unified Multi-Agent Generative AI Platform
 
 <img width="1889" height="872" alt="image" src="https://github.com/user-attachments/assets/2ca56328-d602-4e34-8ade-1eaa6d1c7db7" />
 
-### A Unified Multi-Agent Generative AI Platform
 
 **MyGenius AI** is a production-inspired multi-agent AI system that intelligently routes user requests to specialized AI agents through a centralized orchestration layer.
 
