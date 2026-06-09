@@ -1,6 +1,12 @@
 # ==================================================
 # MyGenius AI  |  Financial Intelligence Copilot
 # ==================================================
+import os
+
+API_URL = os.getenv(
+    "API_URL",
+    "http://127.0.0.1:8000"
+)
 
 import streamlit as st
 import requests
@@ -377,15 +383,23 @@ header[data-testid="stHeader"] {
     border-radius: 14px !important;
     box-shadow: 0 2px 12px rgba(79,70,229,0.10) !important;
 }
-[data-testid="stChatInput"] textarea {
+[data-testid="stChatInput"] textarea,
+[data-testid="stChatInput"] textarea:focus,
+[data-testid="stChatInput"] > div,
+[data-testid="stChatInput"] > div > div,
+[data-testid="stChatInput"] p {
     color: #18181B !important;
+    -webkit-text-fill-color: #18181B !important;
     font-family: 'DM Sans', sans-serif !important;
     font-size: 14px !important;
-    background: transparent !important;
+    background: #FFFFFF !important;
+    caret-color: #4F46E5 !important;
 }
 [data-testid="stChatInput"] textarea::placeholder {
-    color: #6366F1 !important;
+    color: #818CF8 !important;
+    -webkit-text-fill-color: #818CF8 !important;
     font-weight: 500 !important;
+    opacity: 1 !important;
 }
 
 /* ══════════════════════════════════════
@@ -505,9 +519,68 @@ with st.sidebar:
     st.caption("🔒 Session-only storage")
 
     st.markdown('<div class="sb-section">📄 Documents</div>', unsafe_allow_html=True)
-    uploaded_file = st.file_uploader("Upload PDF", type=["pdf"], label_visibility="collapsed")
+
+    #uploaded_file = st.file_uploader("Upload PDF", type=["pdf"], label_visibility="collapsed")
+    #if uploaded_file:
+        #st.success(f"✓ {uploaded_file.name} loaded")
+
+    uploaded_file = st.file_uploader(
+        "Upload PDF",
+        type=["pdf"],
+        label_visibility="collapsed"
+    )
     if uploaded_file:
-        st.success(f"✓ {uploaded_file.name} loaded")
+
+        if "uploaded_doc" not in st.session_state:
+
+            try:
+
+                files = {
+                    "file": (
+                        uploaded_file.name,
+                        uploaded_file.getvalue(),
+                        "application/pdf"
+                    )
+                }
+
+                data = {
+                    "session_id":
+                    st.session_state.session_id
+                }
+
+                response = requests.post(
+                    f"{API_URL}/upload-rag",
+                    files=files,
+                    data=data,
+                    timeout=300
+                )
+
+                result = response.json()
+
+                if result.get("success"):
+
+                    st.session_state.uploaded_doc = True
+
+                    st.success(
+                        f"✓ {uploaded_file.name} indexed successfully"
+                    )
+
+                else:
+
+                    st.error(
+                        result.get(
+                            "error",
+                            "Upload failed"
+                        )
+                    )
+
+            except Exception as e:
+
+                st.error(
+                    f"Upload Error: {e}"
+                )
+
+    
 
     st.markdown('<div class="sb-section">🟢 Agent Status</div>', unsafe_allow_html=True)
     agents = [("🤖", "Chatbot Agent"), ("📈", "Finance Agent"), ("🗄️", "SQL Agent"), ("📚", "RAG Agent"), ("📝", "Summarizer")]
@@ -636,11 +709,26 @@ if query:
             status.info(f"{icon} {txt}")
             time.sleep(0.5)
         try:
+            
             resp = requests.post(
-                "http://127.0.0.1:8000/ask",
-                data={"query": query, "session_id": st.session_state.session_id},
-                timeout=300
+            f"{API_URL}/ask",
+            data={
+                "query": query,
+                "session_id": st.session_state.session_id
+            },
+            timeout=300
+        )
+
+            st.write("Status:", resp.status_code)
+            st.write("Raw Response:", resp.text)
+
+            result = resp.json()
+
+            answer = result.get(
+                "response",
+                "No response returned."
             )
+
             answer = resp.json().get("response", "No response.")
         except Exception as e:
             answer = f"❌ Error: {e}"
