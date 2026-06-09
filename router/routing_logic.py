@@ -30,39 +30,25 @@ from router.intent_classifier import (
 )
 
 
+
 class Router:
 
-    def __init__(self):
+    def __init__(
+        self,
+        chatbot,
+        finance,
+        rag,
+        sql,
+        summarizer
+    ):
 
-        # --------------------------------------
-        # Intent Classifier
-        # --------------------------------------
-        self.classifier = (
-            IntentClassifier()
-        )
+        self.classifier = IntentClassifier()
 
-        # --------------------------------------
-        # Agents
-        # --------------------------------------
-        self.chatbot = (
-            ChatbotAgent()
-        )
-
-        self.finance = (
-            FinanceAgent()
-        )
-
-        self.rag = (
-            RAGAgent()
-        )
-
-        self.sql = (
-            SQLAgent()
-        )
-
-        self.summarizer = (
-            SummarizerAgent()
-        )
+        self.chatbot = chatbot
+        self.finance = finance
+        self.rag = rag
+        self.sql = sql
+        self.summarizer = summarizer
 
     # =====================================
     # Main Routing Function
@@ -77,10 +63,18 @@ class Router:
 
         try:
 
+            #intent = (
+            #    self.classifier.classify(
+            #        query=query,
+            #        file_uploaded=file_path is not None
+            #    )
+            #)
+
+
             intent = (
                 self.classifier.classify(
                     query=query,
-                    has_file=file_path is not None
+                    file_uploaded=file_path is not None
                 )
             )
 
