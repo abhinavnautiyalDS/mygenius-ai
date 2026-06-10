@@ -715,7 +715,8 @@ Passionate about:
 
 # ⭐ If you found this project interesting
 
-Consider giving the repository a star and connecting with me on LinkedIn.
+Consider giving the repository a star and connecting with me on LinkedIn : https://abhinavnautiyalds.github.io/PortfolioWebsite/
+And for more discription about this project read this meadium blog : https://medium.com/@abhinavnautiyal96/building-mygenius-ai-from-independent-ai-workflows-to-a-unified-multi-agent-platform-1b278bd79c48
 
 **MyGenius AI is not just a chatbot project.**
 
