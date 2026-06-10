@@ -3,6 +3,9 @@
 <img width="1889" height="872" alt="image" src="https://github.com/user-attachments/assets/2ca56328-d602-4e34-8ade-1eaa6d1c7db7" />
 
 
+
+
+
 **MyGenius AI** is a production-inspired multi-agent AI system that intelligently routes user requests to specialized AI agents through a centralized orchestration layer.
 
 Instead of building isolated AI applications such as a chatbot, document summarizer, or RAG system, the goal of this project was to create a unified platform capable of understanding user intent and automatically selecting the most appropriate agent for the task.
