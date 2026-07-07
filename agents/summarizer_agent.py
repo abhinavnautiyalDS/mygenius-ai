@@ -1,7 +1,7 @@
 # ==================================================
 # summarizer_agent.py
 # MyGenius AI - Document Summarizer
-# Powered by Gemini
+# Powered by Gemin
 # Built by Abhinav Nautiyal
 # ==================================================
 
