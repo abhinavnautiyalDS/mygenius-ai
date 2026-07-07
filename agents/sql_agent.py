@@ -1,6 +1,6 @@
 # ==================================================
 # sql_agent.py
-# MyGenius AI - SQL Agent
+# MyGenius AI - SQL Agen
 # Built by Abhinav Nautiyal
 # ==================================================
 
