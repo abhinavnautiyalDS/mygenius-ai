@@ -3,7 +3,7 @@
 # MyGenius AI - RAG Agent
 # Gemini + FAISS Version
 # Built by Abhinav Nautiyal
-# ==================================================
+# =================================================
 
 import sys
 from pathlib import Path
