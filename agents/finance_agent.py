@@ -3,7 +3,7 @@
 # MyGenius AI - Financial Agent
 # Gemini Version
 # Built by Abhinav Nautiyal
-# =================================================
+# ================================================
 
 import sys
 import requests
