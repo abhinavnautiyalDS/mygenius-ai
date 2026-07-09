@@ -2,7 +2,7 @@
 # rag_agent.p
 # MyGenius AI - RAG Agent
 # Gemini + FAISS Version
-# Built by Abhinav Nautiyal
+# Built by Abhinav Nautiya
 # =================================================
 
 import sys
