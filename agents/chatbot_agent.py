@@ -2,7 +2,7 @@
 # chatbot_agent.py
 # MyGenius AI - Conversational Agent
 # Powered by Gemini
-# Built by Abhinav Nautiyal
+# Built by Abhinav Nautiya
 # =================================================
 import sys
 from pathlib import Path
