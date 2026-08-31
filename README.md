@@ -1,8 +1,6 @@
 #  MyGenius AI : A Unified Multi-Agent Generative AI Platform
 
-<img width="1889" height="872" alt="image" src="https://github.com/user-attachments/assets/2ca56328-d602-4e34-8ade-1eaa6d1c7db7" />
-
-
+<img width="720" height="316" alt="604887552-a9ebdf4c-d48d-45dc-a9fc-0272df014d5e" src="https://github.com/user-attachments/assets/b6b86cba-230b-4598-b1fb-9bb7372cd7dd" />
 
 
 
