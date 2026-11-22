@@ -265,10 +265,11 @@ async def retrieve_context(query: str, top_k: int = 4) -> list[dict[str, Any]]:
             chunks = json.loads(doc["chunks"])
         except (ValueError, TypeError):
             continue
-        texts = [x.get("text", "") for x in chunks if x.get("text")]
-        vectors = await embed_texts(texts) if texts else []
-        for item, vector in zip(chunks, vectors):
-            candidates.append({"filename": doc["filename"], "text": item["text"],
+        for item in chunks:
+            vector = item.get("embedding")
+            if not isinstance(vector, list) or len(vector) != 384:
+                continue
+            candidates.append({"filename": doc["filename"], "text": item.get("text", ""),
                                "score": cosine(qvec, vector), "chunk": item.get("index", 0)})
     candidates.sort(key=lambda x: x["score"], reverse=True)
     return [x for x in candidates[:top_k] if x["score"] >= 0.18]
@@ -294,13 +295,12 @@ async def web_research(query: str) -> list[dict[str, str]]:
 async def update_summary(cid: str) -> None:
     with db() as conn:
         row = conn.execute("SELECT summary FROM conversations WHERE id=?", (cid,)).fetchone()
+        count = conn.execute("SELECT COUNT(*) AS n FROM messages WHERE conversation_id=?", (cid,)).fetchone()["n"]
         msgs = conn.execute("SELECT role,content FROM messages WHERE conversation_id=? ORDER BY created_at DESC LIMIT 20",
                             (cid,)).fetchall()
-    if not row or len(msgs) < 12:
+    if not row or count < 12 or count % 8 != 0:
         return
     recent = list(reversed(msgs))
-    if len(msgs) % 8 != 0:
-        return
     transcript = "\n".join(f'{m["role"]}: {m["content"][:1500]}' for m in recent)
     try:
         summary = await qwen_chat([
