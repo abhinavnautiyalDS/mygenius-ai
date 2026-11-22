@@ -11,7 +11,7 @@ from typing import Any, AsyncIterator
 import httpx
 from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -69,7 +69,7 @@ async def gateway_auth(request, call_next):
         if request.url.path not in {"/api/v1/health", "/api/v1/capabilities"}:
             supplied = request.headers.get("x-agenticdesk-token", "")
             if supplied != settings.agenticdesk_gateway_token:
-                return __import__("starlette.responses").responses.JSONResponse({"detail": "Unauthorized"}, status_code=401)
+                return JSONResponse({"detail": "Unauthorized"}, status_code=401)
     return await call_next(request)
 
 
