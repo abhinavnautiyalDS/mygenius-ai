@@ -2,11 +2,11 @@ name: AgenticDesk CI
 
 on:
   push:
-    paths:
-      - "agenticdesk/**"
+    branches:
+      - "feature/agenticdesk-foundation"
   pull_request:
-    paths:
-      - "agenticdesk/**"
+    branches:
+      - "feature/agenticdesk-foundation"
 
 jobs:
   frontend:
