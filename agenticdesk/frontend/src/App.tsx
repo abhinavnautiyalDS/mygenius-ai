@@ -4,6 +4,7 @@ import { Activity, ArrowUp, BookOpen, Bot, Check, ChevronDown, CircleHelp, Comma
 const API = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1").replace(/\/$/, "");
 type View = "assistant" | "knowledge" | "mcp" | "approvals" | "workflows" | "settings";
 type Message = { role: "user" | "assistant"; content: string };
+type Source = { type: string; title: string; url?: string; snippet?: string };
 type Conversation = { id: string; title: string; updated_at: string };
 type DocumentItem = { id: string; filename: string; characters: number; chunks: number; created_at: string };
 type ServerItem = { id: string; name: string; url: string; enabled: number };
@@ -33,6 +34,8 @@ export default function App() {
   const [view, setView] = useState<View>("assistant");
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [conversationSummary, setConversationSummary] = useState("");
+  const [sources, setSources] = useState<Source[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -65,11 +68,13 @@ export default function App() {
     try {
       const data = await api("/conversations/" + id);
       setConversationId(id);
+      setConversationSummary(data.summary || "");
+      setSources([]);
       setMessages(data.messages.map((m: any) => ({ role: m.role, content: m.content })));
       setView("assistant");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not open conversation"); }
   }
-  function newChat() { setConversationId(null); setMessages([]); setDraft(""); setView("assistant"); setError(""); }
+  function newChat() { setConversationId(null); setMessages([]); setConversationSummary(""); setSources([]); setDraft(""); setView("assistant"); setError(""); }
 
   async function send(value = draft) {
     const content = value.trim();
@@ -78,7 +83,10 @@ export default function App() {
     try {
       const data = await api("/chat", { ...json({ message: content, conversation_id: conversationId, web_search: web, use_knowledge: useKnowledge }) });
       setConversationId(data.conversation_id);
+      setSources(data.sources || []);
       setMessages(old => [...old, { role: "assistant", content: data.answer }]);
+      const detail = await api("/conversations/" + data.conversation_id);
+      setConversationSummary(detail.summary || "");
       await refresh();
     } catch (e) {
       setMessages(old => [...old, { role: "assistant", content: "I couldn't complete the request. Check the model connection and workspace settings." }]);
@@ -130,7 +138,7 @@ export default function App() {
       {view === "assistant" && <><section className="content chat-content">
         {!messages.length ? <div className="welcome"><div className="spark"><Sparkles size={24}/></div><label>YOUR AI WORKSPACE</label><h1>Think clearly.<br/><em>Build with agents.</em></h1><p>Bring your knowledge, tools and ideas together.<br/>Turn complex tasks into clear outcomes.</p><div className="starter-grid">
           {[[Layers3,"Analyze a codebase","Understand architecture and next steps"],[FileText,"Research documents","Find answers from your knowledge base"],[Globe2,"Research the web","Synthesize information with sources"],[Workflow,"Plan a workflow","Turn a goal into an executable task"]] .map(([Icon, name, desc]: any) => <button className="starter" key={name} onClick={() => send(name + ": ")}><i><Icon size={18}/></i><span><b>{name}</b><small>{desc}</small></span></button>)}
-        </div></div> : <div className="messages">{messages.map((m,i) => <article className="message" key={i}><div className="message-icon">{m.role === "assistant" ? <Sparkles size={16}/> : "A"}</div><div><b>{m.role === "assistant" ? "AgenticDesk" : "You"}</b><p>{m.content}</p></div></article>)}{busy && <div className="loading"><Activity size={15}/> AgenticDesk is thinking…</div>}</div>}
+        </div></div> : <div className="messages">{conversationSummary && <div className="memory-note"><Sparkles size={13}/><span><b>Conversation memory</b> · A compact summary is saved for future context.</span></div>}{messages.map((m,i) => <article className="message" key={i}><div className="message-icon">{m.role === "assistant" ? <Sparkles size={16}/> : "A"}</div><div><b>{m.role === "assistant" ? "AgenticDesk" : "You"}</b><p>{m.content}</p></div></article>)}{sources.length > 0 && <section className="source-panel"><b>Sources used</b>{sources.map((source,i)=><div className="source-item" key={i}><span>{source.type === "web" ? "WEB" : "DOC"}</span><div><b>{source.title}</b>{source.snippet && <small>{source.snippet}</small>}{source.url && <a href={source.url} target="_blank" rel="noreferrer">Open source</a>}</div></div>)}</section>}{busy && <div className="loading"><Activity size={15}/> AgenticDesk is thinking…</div>}</div>}
       </section><div className="composer-wrap"><div className="composer"><textarea rows={2} value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send();}}} placeholder="Ask anything, or describe a task…"/><div className="composer-bottom"><div className="tools"><button className={web?"chosen":""} onClick={()=>setWeb(!web)}><Globe2 size={14}/> Web research</button><button className={useKnowledge?"chosen":""} onClick={()=>setUseKnowledge(!useKnowledge)}><BookOpen size={14}/> Knowledge</button></div><button className="send" disabled={!draft.trim()||busy} onClick={()=>void send()}><ArrowUp size={18}/></button></div></div><div className="footnote"><ShieldCheck size={12}/> Review tool actions before execution. AI can make mistakes.</div></div></>}
 
       {view === "knowledge" && <section className="page-panel"><div className="page-heading"><div><span>YOUR DATA</span><h1>Knowledge base</h1><p>Upload documents to index them with your self-hosted Granite embedding service.</p></div><label className="primary-action"><Upload size={16}/> Add documents<input type="file" accept=".pdf,.docx,.txt,.md" multiple={false} onChange={e=>void uploadFile(e.target.files?.[0])}/></label></div><div className="stat-row"><div><b>{documents.length}</b><small>Indexed documents</small></div><div><b>{documents.reduce((n,d)=>n+(d.chunks||0),0)}</b><small>Text chunks</small></div><div><b>384</b><small>Embedding dimensions</small></div></div><div className="data-card"><div className="card-title"><h3>Indexed sources</h3><button className="icon-button" onClick={()=>void refresh()}><RefreshCw size={15}/></button></div>{documents.map(d=><div className="data-row" key={d.id}><FileText size={19}/><div className="grow"><b>{d.filename}</b><small>{d.chunks} chunks · {d.characters.toLocaleString()} characters</small></div><button className="danger-link" onClick={async()=>{try{await api("/knowledge/documents/"+d.id,{method:"DELETE"});await refresh();}catch(e){setError(String(e));}}}>Remove</button></div>)}{!documents.length&&<div className="empty-state"><BookOpen size={25}/><b>No documents yet</b><p>Upload PDF, DOCX, TXT or Markdown files to start retrieval.</p></div>}</div></section>}
