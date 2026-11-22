@@ -1,95 +1,46 @@
 # Cloudflare Worker gateway
 
-Set these Worker variables/secrets:
-- BACKEND_ORIGIN: the current HTTPS Quick Tunnel origin forwarding to 127.0.0.1:8002 (origin only; no path).
-- AGENTICDESK_GATEWAY_TOKEN: secret matching the backend environment.
+The deployable Worker source is `src/index.js`; deploy from this directory with Wrangler.
 
-Deploy the Worker below. The Pages frontend should use:
-VITE_API_BASE_URL=https://agenticdesk-api.abhinavnautiyal96.workers.dev/api/v1
+## Configure
 
-```js
-const ALLOWED_ORIGINS = new Set([
-  "https://3db7b20b.agenticdesk.pages.dev",
-]);
+- `BACKEND_ORIGIN`: HTTPS origin of the current Cloudflare Quick Tunnel forwarding to AgenticDesk on `127.0.0.1:8002`. Use the origin only, with no API path.
+- `AGENTICDESK_GATEWAY_TOKEN`: Worker secret matching `AGENTICDESK_GATEWAY_TOKEN` in backend/.env.
+- The allowed Pages origin is currently `https://3db7b20b.agenticdesk.pages.dev` in `src/index.js`. Update it if the Pages hostname changes.
 
-function isAllowedPath(path) {
-  return path === "/" ||
-    path === "/api/v1/health" ||
-    path === "/api/v1/capabilities" ||
-    path === "/api/v1/chat" ||
-    path === "/api/v1/chat/stream" ||
-    path === "/api/v1/conversations" ||
-    path === "/api/v1/knowledge/documents" ||
-    path === "/api/v1/mcp/servers" ||
-    path === "/api/v1/approvals" ||
-    path === "/api/v1/workflows" ||
-    /^\/api\/v1\/conversations\/[a-f0-9-]+$/.test(path) ||
-    /^\/api\/v1\/knowledge\/documents\/[a-f0-9-]+$/.test(path) ||
-    /^\/api\/v1\/mcp\/servers\/[a-f0-9-]+\/tools$/.test(path) ||
-    /^\/api\/v1\/mcp\/servers\/[a-f0-9-]+\/tools\/[A-Za-z0-9_.-]+\/request$/.test(path) ||
-    /^\/api\/v1\/approvals\/[a-f0-9-]+\/(approve|reject)$/.test(path);
-}
+Set the backend origin as a Worker variable and token as a secret:
 
-function corsHeaders(origin) {
-  const headers = new Headers({
-    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Max-Age": "86400",
-    "Vary": "Origin",
-  });
-  if (ALLOWED_ORIGINS.has(origin)) headers.set("Access-Control-Allow-Origin", origin);
-  return headers;
-}
-
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    const origin = request.headers.get("Origin") || "";
-    const headers = corsHeaders(origin);
-
-    if (origin && !ALLOWED_ORIGINS.has(origin))
-      return new Response("Origin not allowed", { status: 403, headers });
-
-    if (!["GET", "POST", "DELETE", "OPTIONS"].includes(request.method))
-      return new Response("Method not allowed", { status: 405, headers });
-
-    if (!isAllowedPath(url.pathname))
-      return new Response("Not found", { status: 404, headers });
-
-    if (request.method === "OPTIONS")
-      return new Response(null, { status: 204, headers });
-
-    if (!env.BACKEND_ORIGIN || !env.AGENTICDESK_GATEWAY_TOKEN)
-      return new Response("Gateway configuration missing", { status: 503, headers });
-
-    const upstreamUrl = new URL(url.pathname + url.search, env.BACKEND_ORIGIN);
-    const upstreamHeaders = new Headers(request.headers);
-    upstreamHeaders.delete("x-agenticdesk-token");
-    upstreamHeaders.set("x-agenticdesk-token", env.AGENTICDESK_GATEWAY_TOKEN);
-    upstreamHeaders.delete("host");
-    upstreamHeaders.delete("origin");
-
-    try {
-      const upstream = await fetch(upstreamUrl, {
-        method: request.method,
-        headers: upstreamHeaders,
-        body: ["GET", "HEAD"].includes(request.method) ? undefined : request.body,
-        redirect: "manual",
-      });
-      const responseHeaders = new Headers(upstream.headers);
-      for (const [key, value] of headers.entries()) responseHeaders.set(key, value);
-      responseHeaders.set("Cache-Control", "no-store");
-      responseHeaders.delete("server");
-      return new Response(upstream.body, {
-        status: upstream.status,
-        statusText: upstream.statusText,
-        headers: responseHeaders,
-      });
-    } catch {
-      return new Response("AgenticDesk backend unavailable", { status: 502, headers });
-    }
-  },
-};
+```bash
+npx wrangler secret put AGENTICDESK_GATEWAY_TOKEN
+npx wrangler deploy
 ```
 
-Do not hardcode the gateway token in Worker source. Configure it as a Worker secret. Quick Tunnel URLs can change; update BACKEND_ORIGIN whenever the tunnel is recreated.
+Set `BACKEND_ORIGIN` in the Cloudflare Worker dashboard under Settings > Variables and Secrets, or use Wrangler's supported variable command for your installed version. Do not put the token in wrangler.toml or source code.
+
+## Deploy
+
+```bash
+npm install
+npm run deploy
+```
+
+## Frontend
+
+Set the Pages build variable:
+
+`VITE_API_BASE_URL=https://agenticdesk-api.abhinavnautiyal96.workers.dev/api/v1`
+
+Pages project root: `agenticdesk/frontend`
+Build command: `npm ci && npm run build`
+Build output: `dist`
+
+## Gateway behavior
+
+- Exact origin allowlist and GET/POST/DELETE/OPTIONS method allowlist.
+- Exact API route allowlist matching the FastAPI contract.
+- Worker injects `x-agenticdesk-token` from its secret; browser code never sees it.
+- No-store responses and no redirects to arbitrary origins.
+- Backend origin must be HTTPS.
+- Quick Tunnel URLs can rotate; update `BACKEND_ORIGIN` when the tunnel is recreated.
+
+Do not hardcode the gateway token in Worker source. Never expose Qwen or Granite ports publicly.
