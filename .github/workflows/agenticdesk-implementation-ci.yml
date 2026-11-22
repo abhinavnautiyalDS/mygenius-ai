@@ -4,9 +4,10 @@ on:
   push:
     branches:
       - "feature/agenticdesk-implementation"
+      - "feature/agenticdesk-foundation"
   pull_request:
     branches:
-      - "feature/agenticdesk-implementation"
+      - "feature/agenticdesk-foundation"
 
 jobs:
   frontend:
