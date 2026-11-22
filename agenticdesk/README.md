@@ -11,6 +11,12 @@ AgenticDesk is a self-hosted agent workspace built alongside MyGenius AI. It com
 - Workflows: submit a task to the reasoning model and retain an execution record.
 - Capabilities: backend-reported status for model, retrieval, MCP and web search configuration.
 
+## Implementation status
+
+The integration branch now includes the FastAPI workspace routes, SQLite conversation memory migration, Qwen chat client, Granite document embeddings and cosine retrieval, optional Tavily research, HTTP JSON-RPC MCP discovery, approval-gated tool execution, workflow run history, Cloudflare Worker source, tests, and EC2 deployment templates. Read [the A-to-Z plan](docs/AGENTICDESK_A_TO_Z_MASTER_PLAN.md), [implementation checklist](docs/IMPLEMENTATION_CHECKLIST.md), [local development guide](docs/LOCAL_DEVELOPMENT.md), and [EC2 connect-only runbook](deploy/EC2_CONNECT.md).
+
+**Important limitations:** the MCP adapter is a narrow HTTP JSON-RPC implementation and may need session negotiation for some servers; SSRF protection should be reinforced with network egress controls and DNS pinning; SQLite cosine search is for a small demo corpus; workflow runs are single Qwen tasks; the stream route chunks the completed response rather than streaming model tokens; shared gateway auth is not per-user authentication. Run the test suite and complete the release checklist before production deployment.
+
 ## Architecture
 - Frontend: React 18, TypeScript, Vite, lucide-react.
 - API: FastAPI, Pydantic Settings, HTTPX.
