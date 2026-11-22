@@ -63,7 +63,7 @@ export default {
     let upstream;
     try {
       const backend = new URL(env.BACKEND_ORIGIN);
-      if (backend.protocol !== "https:" && backend.hostname !== "127.0.0.1") {
+      if (backend.protocol !== "https:") {
         return new Response("Backend origin must use HTTPS", { status: 500, headers });
       }
       upstream = new URL(incoming.pathname + incoming.search, backend);
