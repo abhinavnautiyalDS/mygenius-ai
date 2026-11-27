@@ -169,34 +169,35 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
         return {"profile": profile, "events": [event], "agent_events": {"resume_intelligence": event}}
 
     async def company_research(state: CareerState) -> dict[str, Any]:
-        # This node is independent and can later call approved company-data tools.
-        # It never invents employer facts in the absence of sources.
+        # Company-specific research is intentionally marked unavailable until
+        # a separate source provider is connected.
         event = _event("company_research", "skipped", "No company research provider configured yet")
         return {"research": [], "events": [event], "agent_events": {"company_research": event}}
 
     async def skill_gap_analysis(state: CareerState) -> dict[str, Any]:
-        plan_skills = {str(x).casefold() for x in state.get("plan", {}).get("skills", [])}
-        profile_skills = {str(x).casefold() for x in state.get("profile", {}).get("skills", [])}
-        gaps = sorted(plan_skills - profile_skills) if profile_skills else []
-        event = _event("skill_gap_analysis", "completed" if profile_skills else "needs_input", f"Identified {len(gaps)} potential skill gaps" if profile_skills else "Candidate profile is not available")
+        desired = {str(value).casefold() for value in state.get("plan", {}).get("skills", [])}
+        existing = {str(value).casefold() for value in state.get("profile", {}).get("skills", [])}
+        gaps = sorted(desired - existing) if existing else []
+        status = "completed" if existing else "needs_input"
+        detail = f"Identified {len(gaps)} potential skill gaps" if existing else "Candidate profile is not available"
+        event = _event("skill_gap_analysis", status, detail)
         return {"skill_gaps": gaps, "events": [event], "agent_events": {"skill_gap_analysis": event}}
 
     async def job_matching(state: CareerState) -> dict[str, Any]:
         jobs = state.get("jobs", [])
         profile = state.get("profile", {})
         if not jobs or profile.get("status") == "missing":
-            event = _event("job_matching", "needs_input", "Requires discovered listings and a candidate profile")
+            event = _event("job_matching", "needs_input", "Requires discovered job leads and a candidate profile")
             return {"matches": [], "events": [event], "agent_events": {"job_matching": event}}
-        # Conservative lexical signal only; not an ML relevance score.
-        skills = {str(x).casefold() for x in profile.get("skills", [])}
-        scored = []
+        skills = {str(value).casefold() for value in profile.get("skills", [])}
+        ranked: list[dict[str, Any]] = []
         for job in jobs:
-            text = (job.get("title", "") + " " + job.get("snippet", "")).casefold()
-            overlap = sum(1 for skill in skills if skill and skill in text)
-            scored.append({**job, "matched_skill_mentions": overlap})
-        scored.sort(key=lambda x: x["matched_skill_mentions"], reverse=True)
-        event = _event("job_matching", "completed", f"Ranked {len(scored[:20])} candidate listings by skill mentions")
-        return {"matches": scored[:20], "events": [event], "agent_events": {"job_matching": event}}
+            searchable = f'{job.get("title", "")} {job.get("snippet", "")}'.casefold()
+            overlap = sum(1 for skill in skills if skill and skill in searchable)
+            ranked.append({**job, "matched_skill_mentions": overlap})
+        ranked.sort(key=lambda item: item["matched_skill_mentions"], reverse=True)
+        event = _event("job_matching", "completed", f"Ranked {len(ranked[:20])} job leads by skill mentions")
+        return {"matches": ranked[:20], "events": [event], "agent_events": {"job_matching": event}}
 
     async def preparation(state: CareerState) -> dict[str, Any]:
         # Preparation drafts are not application submissions. The model is told
