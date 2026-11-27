@@ -641,21 +641,46 @@ async def list_workflows():
 
 @app.post("/api/v1/workflows")
 async def create_workflow(payload: WorkflowPayload):
+    """Create a persisted CareerPilot multi-agent run.
+
+    Legacy callers may keep sending {message}; web_search is opt-in.
+    """
     run_id, stamp = str(uuid.uuid4()), now()
     with db() as conn:
-        conn.execute("INSERT INTO workflow_runs(id,task,status,result,created_at,updated_at) VALUES(?,?,?,?,?,?)",
-                     (run_id, payload.message, "running", None, stamp, stamp))
+        conn.execute(
+            "INSERT INTO workflow_runs(id,task,status,result,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+            (run_id, payload.message, "running", None, stamp, stamp),
+        )
     try:
-        result = await qwen_chat([
-            {"role": "system", "content": "You are AgenticDesk workflow executor. Complete the user's bounded task. Do not claim to have performed external actions or used tools unless actually done."},
-            {"role": "user", "content": payload.message}
-        ])
+        from .careerpilot import run_career_workflow
+
+        graph_result = await run_career_workflow(
+            payload.message,
+            model_call=qwen_chat,
+            web_search_call=web_research,
+            web_search=payload.web_search,
+        )
+        result = graph_result["result"]
         with db() as conn:
-            conn.execute("UPDATE workflow_runs SET status='completed',result=?,updated_at=? WHERE id=?",
-                         (result, now(), run_id))
-        return {"id": run_id, "task": payload.message, "status": "completed", "result": result, "created_at": stamp}
+            conn.execute(
+                "UPDATE workflow_runs SET status=?,result=?,updated_at=? WHERE id=?",
+                (graph_result["status"], result, now(), run_id),
+            )
+        return {
+            "id": run_id,
+            "task": payload.message,
+            "status": graph_result["status"],
+            "result": result,
+            "events": graph_result["events"],
+            "agent_count": graph_result["agent_count"],
+            "created_at": stamp,
+        }
     except Exception as exc:
         with db() as conn:
-            conn.execute("UPDATE workflow_runs SET status='failed',result=?,updated_at=? WHERE id=?",
-                         (str(exc)[:2000], now(), run_id))
+            conn.execute(
+                "UPDATE workflow_runs SET status='failed',result=?,updated_at=? WHERE id=?",
+                (str(exc)[:2000], now(), run_id),
+            )
         raise
+
+
