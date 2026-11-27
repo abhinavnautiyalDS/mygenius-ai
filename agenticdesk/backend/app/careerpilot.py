@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, TypedDict
@@ -84,6 +85,8 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
             if not isinstance(plan, dict):
                 raise ValueError("Planner output must be an object")
         except (ValueError, TypeError, json.JSONDecodeError):
+            # Avoid losing user-provided constraints when the 2B model returns
+            # prose instead of JSON. This parser only extracts explicit fields.
             plan = {
                 "job_titles": [],
                 "locations": [],
@@ -95,6 +98,17 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
                 "raw_goal": state["task"],
                 "planner_note": "Structured planning unavailable; original goal preserved.",
             }
+            goal = state["task"]
+            role_match = re.search(r"(?:roles?|positions?|jobs?)\s*(?:as|for|:)?\s*([A-Za-z0-9 +#/,&-]+?)(?:\s+in\s+|,|with\s+a\s+salary|$)", goal, re.IGNORECASE)
+            location_match = re.search(r"\bin\s+([A-Za-z][A-Za-z0-9 ,&-]+?)(?:\s+with\s+a\s+salary|\s+at\s+|$)", goal, re.IGNORECASE)
+            salary_match = re.search(r"(?:₹|INR\s*)?\s*(\d+(?:\.\d+)?)\s*(?:-|to)\s*(\d+(?:\.\d+)?)\s*LPA", goal, re.IGNORECASE)
+            if role_match:
+                plan["job_titles"] = [part.strip() for part in re.split(r",|\band\b", role_match.group(1), flags=re.IGNORECASE) if part.strip()]
+            if location_match:
+                plan["locations"] = [part.strip() for part in location_match.group(1).split(",") if part.strip()]
+            if salary_match:
+                plan["salary_min_lpa"] = float(salary_match.group(1))
+                plan["salary_max_lpa"] = float(salary_match.group(2))
 
         profile = (await profile_loader()) if profile_loader is not None else {}
         profile = profile if isinstance(profile, dict) else {}
@@ -304,7 +318,7 @@ async def run_career_workflow(
         "options": {"web_search": web_search},
         "status": "queued",
         "events": [],
-        "agent_events": {name: _event(name, "queued", "Waiting for dependencies") for name in AGENTS},
+        "agent_events": {},
         "errors": [],
     }
     final = await graph.ainvoke(initial)
