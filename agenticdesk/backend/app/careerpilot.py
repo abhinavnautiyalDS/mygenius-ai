@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, TypedDict
@@ -35,6 +34,7 @@ class CareerState(TypedDict, total=False):
     options: dict[str, bool]
     plan: dict[str, Any]
     events: list[dict[str, Any]]
+    agent_events: dict[str, dict[str, Any]]
     profile: dict[str, Any]
     jobs: list[dict[str, Any]]
     research: list[dict[str, Any]]
@@ -116,6 +116,7 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
             "profile": profile if profile else {"status": "missing", "skills": [], "experience": [], "projects": []},
             "status": "running",
             "events": [_event("orchestrator", "completed", "Created task plan and loaded profile preferences")],
+            "agent_events": {"orchestrator": _event("orchestrator", "completed", "Created task plan and loaded profile preferences")},
             "errors": [],
         }
 
@@ -154,7 +155,7 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
             return {
                 "jobs": [],
                 "errors": [f"job_discovery: {type(exc).__name__}"],
-                "events": [_event("job_discovery", "failed", "Search provider request failed")],
+                "events": [_event("job_discovery", "failed", "Search provider request failed")],\n                "agent_events": {"job_discovery": _event("job_discovery", "failed", "Search provider request failed")},
             }
 
     async def resume_intelligence(state: CareerState) -> dict[str, Any]:
@@ -162,11 +163,11 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
         if not profile or profile.get("status") == "missing":
             return {
                 "profile": {"status": "missing", "skills": [], "experience": [], "projects": []},
-                "events": [_event("resume_intelligence", "needs_input", "Complete the candidate profile or upload a resume")],
+                "events": [_event("resume_intelligence", "needs_input", "Complete the candidate profile or upload a resume")],\n                "agent_events": {"resume_intelligence": _event("resume_intelligence", "needs_input", "Complete the candidate profile or upload a resume")},
             }
         return {
             "profile": profile,
-            "events": [_event("resume_intelligence", "completed", "Loaded candidate profile")],
+            "events": [_event("resume_intelligence", "completed", "Loaded candidate profile")],\n            "agent_events": {"resume_intelligence": _event("resume_intelligence", "completed", "Loaded candidate profile")},
         }
 
     async def company_research(state: CareerState) -> dict[str, Any]:
@@ -193,7 +194,7 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
         if not jobs or profile.get("status") == "missing":
             return {
                 "matches": [],
-                "events": [_event("job_matching", "needs_input", "Requires discovered listings and a candidate profile")],
+                "events": [_event("job_matching", "needs_input", "Requires discovered listings and a candidate profile")],\n                "agent_events": {"job_matching": _event("job_matching", "needs_input", "Requires discovered listings and a candidate profile")},
             }
         # Initial conservative lexical signal only. Do not present this as an
         # ML relevance score; a proper reranker can be added after evaluation.
@@ -206,7 +207,7 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
         scored.sort(key=lambda x: x["matched_skill_mentions"], reverse=True)
         return {
             "matches": scored[:20],
-            "events": [_event("job_matching", "completed", f"Ranked {len(scored[:20])} candidate listings by skill mentions")],
+            "events": [_event("job_matching", "completed", f"Ranked {len(scored[:20])} candidate listings by skill mentions")],\n            "agent_events": {"job_matching": _event("job_matching", "completed", f"Ranked {len(scored[:20])} candidate listings by skill mentions")},
         }
 
     async def preparation(state: CareerState) -> dict[str, Any]:
@@ -233,13 +234,13 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
             event = _event("resume_optimization", "completed", "Generated review-only preparation draft")
             outreach_event = _event("outreach_drafting", "completed", "Outreach drafts included for review")
             interview_event = _event("interview_preparation", "skipped", "Interview prep will run after a role is selected")
-            return {"artifacts": artifacts, "events": [event, outreach_event, interview_event]}
+            return {"artifacts": artifacts, "events": [event, outreach_event, interview_event], "agent_events": {\n                "resume_optimization": event, "outreach_drafting": outreach_event, "interview_preparation": interview_event}}
         except Exception as exc:
             logger.exception("CareerPilot preparation failed")
             return {
                 "artifacts": {},
                 "errors": [f"preparation: {type(exc).__name__}"],
-                "events": [_event("resume_optimization", "failed", "Could not prepare drafts")],
+                "events": [_event("resume_optimization", "failed", "Could not prepare drafts")],\n                "agent_events": {"resume_optimization": _event("resume_optimization", "failed", "Could not prepare drafts")},
             }
 
     async def finalize(state: CareerState) -> dict[str, Any]:
@@ -311,5 +312,5 @@ async def run_career_workflow(
         "status": final.get("status", "completed"),
         "result": final.get("result", ""),
         "events": sorted(final.get("events", []), key=lambda e: e.get("timestamp", "")),
-        "agent_count": len(AGENTS),
+        "agent_count": len(AGENTS),\n        "agents": {**final.get("agent_events", {})},
     }
