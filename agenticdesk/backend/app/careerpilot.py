@@ -200,35 +200,46 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
         return {"matches": ranked[:20], "events": [event], "agent_events": {"job_matching": event}}
 
     async def preparation(state: CareerState) -> dict[str, Any]:
-        # Preparation drafts are not application submissions. The model is told
-        # never to fabricate employment, achievements, qualifications or skills.
-        matches = state.get("matches", [])
-        plan = state.get("plan", {})
-        profile = state.get("profile", {})
-        prompt = (
-            "You are a career document preparation assistant. Use only the supplied "
-            "candidate facts and job information. Never invent employers, dates, "
-            "degrees, skills, achievements, metrics or experience. Clearly mark "
-            "missing facts as questions/placeholders. Return concise JSON with "
-            "resume_guidance, cover_letter_drafts and recruiter_message_drafts."
-        )
+        # Draft-only output. No applications or messages are sent.
         payload = {
-            "candidate_profile": profile,
-            "job_matches": matches[:5],
-            "goal": plan,
+            "candidate_profile": state.get("profile", {}),
+            "job_matches": state.get("matches", [])[:5],
+            "goal": state.get("plan", {}),
         }
+        prompt = (
+            "Prepare career application drafts using only the supplied candidate facts "
+            "and job information. Never invent employers, dates, degrees, skills, "
+            "achievements, metrics or experience. Clearly mark missing facts as "
+            "questions/placeholders. Return concise JSON with resume_guidance, "
+            "cover_letter_drafts and recruiter_message_drafts."
+        )
         try:
             raw = await _call_model(model_call, prompt, json.dumps(payload, ensure_ascii=False), 1100)
-            artifacts = {"preparation_draft": raw, "requires_user_review": True}
-            event = _event("resume_optimization", "completed", "Generated review-only preparation draft")
-            outreach_event = _event("outreach_drafting", "completed", "Outreach drafts included for review")
-            interview_event = _event("interview_preparation", "skipped", "Interview prep will run after a role is selected")
-            return {"artifacts": artifacts, "events": [event, outreach_event, interview_event], "agent_events": {"resume_optimization": event, "outreach_drafting": outreach_event, "interview_preparation": interview_event}}
+            resume_event = _event("resume_optimization", "completed", "Generated review-only resume guidance")
+            outreach_event = _event("outreach_drafting", "completed", "Generated recruiter message drafts for review")
+            interview_event = _event("interview_preparation", "skipped", "Interview preparation starts after a job is selected")
+            return {
+                "artifacts": {"preparation_draft": raw, "requires_user_review": True},
+                "events": [resume_event, outreach_event, interview_event],
+                "agent_events": {
+                    "resume_optimization": resume_event,
+                    "outreach_drafting": outreach_event,
+                    "interview_preparation": interview_event,
+                },
+            }
         except Exception as exc:
             logger.exception("CareerPilot preparation failed")
-            event = _event("resume_optimization", "failed", "Could not prepare drafts")
-            return {"artifacts": {}, "errors": [f"preparation: {type(exc).__name__}"], "events": [event], "agent_events": {"resume_optimization": event}}
-
+            event = _event("resume_optimization", "failed", "Could not prepare application drafts")
+            return {
+                "artifacts": {},
+                "errors": [f"preparation: {type(exc).__name__}"],
+                "events": [event],
+                "agent_events": {
+                    "resume_optimization": event,
+                    "outreach_drafting": _event("outreach_drafting", "skipped", "Preparation dependency failed"),
+                    "interview_preparation": _event("interview_preparation", "skipped", "Preparation dependency failed"),
+                },
+            }
 
     async def finalize(state: CareerState) -> dict[str, Any]:
         summary = {
