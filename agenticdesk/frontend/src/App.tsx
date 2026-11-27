@@ -9,7 +9,9 @@ type Conversation = { id: string; title: string; updated_at: string };
 type DocumentItem = { id: string; filename: string; characters: number; chunks: number; created_at: string };
 type ServerItem = { id: string; name: string; url: string; enabled: number };
 type Approval = { id: string; server_name: string; tool_name: string; arguments: string; status: string; created_at: string };
-type WorkflowItem = { id: string; task: string; status: string; result: string; created_at: string };
+type WorkflowItem = { id: string; task: string; status: string; result: string; created_at: string; events?: AgentEvent[]; agent_count?: number };
+type AgentEvent = { id: string; agent: string; status: string; detail: string; timestamp: string };
+type CareerProfile = { full_name: string; headline: string; skills: string; preferred_roles: string; preferred_locations: string; salary_min_lpa: string; salary_max_lpa: string };
 
 const nav: { id: View; label: string; icon: typeof Bot }[] = [
   { id: "assistant", label: "Assistant", icon: Bot },
@@ -51,6 +53,10 @@ export default function App() {
   const [error, setError] = useState("");
   const [sidebar, setSidebar] = useState(true);
   const [search, setSearch] = useState("");
+  const [workflowWeb, setWorkflowWeb] = useState(false);
+  const [profile, setProfile] = useState<CareerProfile>({ full_name: "", headline: "", skills: "", preferred_roles: "", preferred_locations: "", salary_min_lpa: "", salary_max_lpa: "" });
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [activeWorkflow, setActiveWorkflow] = useState<WorkflowItem | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -62,7 +68,25 @@ export default function App() {
       setApprovals(a.items || []); setWorkflows(w.items || []); setCapabilities(caps);
     } catch (e) { setError(e instanceof Error ? e.message : "Could not load workspace"); }
   }, []);
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { void refresh(); void loadCareerProfile(); }, [refresh]);
+
+  async function loadCareerProfile() {
+    try {
+      const data = await api("/career/profile");
+      const p = data.profile;
+      if (!p) return;
+      setProfile({ full_name: p.full_name || "", headline: p.headline || "", skills: (p.skills || []).join(", "), preferred_roles: (p.preferred_roles || []).join(", "), preferred_locations: (p.preferred_locations || []).join(", "), salary_min_lpa: p.salary_min_lpa == null ? "" : String(p.salary_min_lpa), salary_max_lpa: p.salary_max_lpa == null ? "" : String(p.salary_max_lpa) });
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not load career profile"); }
+  }
+
+  async function saveCareerProfile() {
+    setBusy(true); setError(""); setProfileSaved(false);
+    try {
+      await api("/career/profile", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ full_name: profile.full_name, headline: profile.headline, skills: profile.skills.split(",").map(x=>x.trim()).filter(Boolean), preferred_roles: profile.preferred_roles.split(",").map(x=>x.trim()).filter(Boolean), preferred_locations: profile.preferred_locations.split(",").map(x=>x.trim()).filter(Boolean), salary_min_lpa: profile.salary_min_lpa ? Number(profile.salary_min_lpa) : null, salary_max_lpa: profile.salary_max_lpa ? Number(profile.salary_max_lpa) : null }) });
+      setProfileSaved(true);
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not save career profile"); }
+    finally { setBusy(false); }
+  }
 
   async function openConversation(id: string) {
     try {
@@ -112,11 +136,17 @@ export default function App() {
   }
   async function runWorkflow() {
     const task = draft.trim(); if (!task || busy) return;
-    setBusy(true); setError("");
-    try { await api("/workflows", json({ message: task })); setDraft(""); await refresh(); }
-    catch (e) { setError(e instanceof Error ? e.message : "Workflow failed"); }
+    setBusy(true); setError(""); setActiveWorkflow(null);
+    try {
+      const data = await api("/workflows", { ...json({ message: task, web_search: workflowWeb }) });
+      const run: WorkflowItem = { ...data, events: data.events || [], agent_count: data.agent_count };
+      setActiveWorkflow(run);
+      setDraft("");
+      await refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : "Workflow failed"); }
     finally { setBusy(false); }
   }
+
 
   const title = nav.find(n => n.id === view)?.label || "Assistant";
   const filteredConversations = conversations.filter(c => c.title.toLowerCase().includes(search.toLowerCase()));
@@ -147,7 +177,28 @@ export default function App() {
 
       {view === "approvals" && <section className="page-panel"><div className="page-heading"><div><span>HUMAN IN THE LOOP</span><h1>Tool approvals</h1><p>Review each proposed external tool call before it executes.</p></div></div><div className="data-card">{approvals.map(a=><div className="approval-row" key={a.id}><div className="grow"><div className="approval-meta"><b>{a.tool_name}</b><span className={"status "+a.status}>{a.status}</span></div><small>{a.server_name} · {new Date(a.created_at).toLocaleString()}</small><pre>{a.arguments}</pre></div>{a.status==="pending"&&<div className="approval-actions"><button className="approve" onClick={()=>void approvalAction(a.id,"approve")}><Check size={14}/> Approve & run</button><button className="reject" onClick={()=>void approvalAction(a.id,"reject")}><X size={14}/> Reject</button></div>}</div>)}{!approvals.length&&<div className="empty-state"><ShieldCheck size={25}/><b>No approval requests</b><p>Requested MCP tool calls will appear here for review.</p></div>}</div></section>}
 
-      {view === "workflows" && <section className="page-panel"><div className="page-heading"><div><span>ORCHESTRATION</span><h1>Workflows</h1><p>Run a task through the configured reasoning model and review execution history.</p></div></div><div className="data-card form-card"><h3>Start a workflow</h3><textarea className="workflow-input" rows={3} value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Describe the outcome you want to achieve…"/><button className="primary-action" onClick={()=>void runWorkflow()} disabled={!draft.trim()||busy}><Workflow size={15}/> {busy?"Running…":"Run workflow"}</button></div><div className="data-card"><div className="card-title"><h3>Execution history</h3><span>{workflows.length} runs</span></div>{workflows.map(w=><div className="data-row" key={w.id}><Workflow size={18}/><div className="grow"><b>{w.task}</b><small>{w.status} · {new Date(w.created_at).toLocaleString()}</small></div><details><summary>Result</summary><pre>{w.result}</pre></details></div>)}{!workflows.length&&<div className="empty-state"><Workflow size={25}/><b>No workflow runs yet</b><p>Your task executions will be listed here.</p></div>}</div></section>}
+      {view === "workflows" && <section className="page-panel">
+        <div className="page-heading"><div><span>CAREER EXECUTION</span><h1>CareerPilot workflows</h1><p>Describe your job-search goal. Independent agents run in parallel, then matching and preparation run after their dependencies finish.</p></div></div>
+        <div className="data-card form-card">
+          <h3>Candidate profile</h3>
+          <div className="form-grid"><label>Name<input value={profile.full_name} onChange={e=>setProfile({...profile,full_name:e.target.value})} placeholder="Your name"/></label><label>Professional headline<input value={profile.headline} onChange={e=>setProfile({...profile,headline:e.target.value})} placeholder="e.g. Data Scientist | GenAI Engineer"/></label></div>
+          <label className="profile-field">Skills (comma separated)<input value={profile.skills} onChange={e=>setProfile({...profile,skills:e.target.value})} placeholder="Python, SQL, Machine Learning, LangChain"/></label>
+          <div className="form-grid"><label>Target roles<input value={profile.preferred_roles} onChange={e=>setProfile({...profile,preferred_roles:e.target.value})} placeholder="Data Scientist, GenAI Engineer"/></label><label>Preferred locations<input value={profile.preferred_locations} onChange={e=>setProfile({...profile,preferred_locations:e.target.value})} placeholder="Delhi NCR, Noida, Remote"/></label></div>
+          <div className="form-grid"><label>Minimum salary (LPA)<input type="number" min="0" value={profile.salary_min_lpa} onChange={e=>setProfile({...profile,salary_min_lpa:e.target.value})}/></label><label>Maximum salary (LPA)<input type="number" min="0" value={profile.salary_max_lpa} onChange={e=>setProfile({...profile,salary_max_lpa:e.target.value})}/></label></div>
+          <div className="profile-actions"><button className="primary-action" onClick={()=>void saveCareerProfile()} disabled={busy}>Save candidate profile</button>{profileSaved&&<span className="saved-note">Profile saved</span>}</div>
+        </div>
+        <div className="data-card form-card"><h3>Start a CareerPilot run</h3>
+          <textarea className="workflow-input" rows={4} value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Find Data Scientist and GenAI Engineer jobs in Delhi NCR, compare them against my profile, identify skill gaps and prepare tailored application drafts…"/>
+          <label className="workflow-toggle"><input type="checkbox" checked={workflowWeb} onChange={e=>setWorkflowWeb(e.target.checked)}/> Enable web search for job discovery</label>
+          <button className="primary-action" onClick={()=>void runWorkflow()} disabled={!draft.trim()||busy}><Workflow size={15}/> {busy?"Running agents…":"Run CareerPilot"}</button>
+          <small className="muted-note">Web search results are leads, not verified vacancies. No job application or recruiter message is submitted by this workflow.</small>
+        </div>
+        {activeWorkflow && <div className="data-card"><div className="card-title"><h3>Latest execution · {activeWorkflow.agent_count || 0} agents</h3><span className={"status "+activeWorkflow.status}>{activeWorkflow.status}</span></div>
+          <div className="agent-event-list">{(activeWorkflow.events||[]).map(ev=><div className="agent-event" key={ev.id}><div className="agent-event-head"><b>{ev.agent.replaceAll("_"," ")}</b><span className={"status "+ev.status}>{ev.status.replaceAll("_"," ")}</span></div><small>{ev.detail}</small></div>)}</div>
+          <details open><summary>Workflow result</summary><pre className="workflow-result">{activeWorkflow.result}</pre></details>
+        </div>}
+        <div className="data-card"><div className="card-title"><h3>Execution history</h3><span>{workflows.length} runs</span></div>{workflows.map(w=><div className="data-row" key={w.id}><Workflow size={18}/><div className="grow"><b>{w.task}</b><small>{w.status} · {new Date(w.created_at).toLocaleString()}</small></div><details><summary>Result</summary><pre>{w.result}</pre></details></div>)}{!workflows.length&&<div className="empty-state"><Workflow size={25}/><b>No workflow runs yet</b><p>Your task executions will be listed here.</p></div>}</div>
+      </section>}
 
       {view === "settings" && <section className="page-panel"><div className="page-heading"><div><span>WORKSPACE CONFIGURATION</span><h1>Settings & capabilities</h1><p>Service configuration status reported by the backend.</p></div></div><div className="data-card">{Object.entries(capabilities).map(([key,value])=><div className="capability-row" key={key}><div className="grow"><b>{key.replace("_"," ")}</b><small>{value.provider || value.embedding_model || value.status}</small></div><span className={"status "+(value.status==="configured"||value.status==="available"||value.status==="http-json-rpc"?"approved":"pending")}>{value.status}</span></div>)}</div><div className="notice"><ShieldCheck size={18}/><p>Secrets belong in the backend environment, never in frontend code or Git. MCP servers should be trusted endpoints; review tool arguments before approval.</p></div></section>}
     </main>
