@@ -97,10 +97,25 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
                 "raw_goal": state["task"],
                 "planner_note": "Could not parse structured plan; preserved original goal.",
             }
+        profile = (await profile_loader()) if profile_loader is not None else {}
+        if not isinstance(profile, dict):
+            profile = {}
+        # The saved candidate profile is the source of truth for preferences;
+        # natural-language constraints from this task take precedence.
+        for key in ("job_titles", "locations", "salary_min_lpa", "salary_max_lpa", "skills"):
+            profile_key = {
+                "job_titles": "preferred_roles",
+                "locations": "preferred_locations",
+            }.get(key, key)
+            value = profile.get(profile_key)
+            if value not in (None, "", []):
+                if key not in plan or plan.get(key) in (None, "", []):
+                    plan[key] = value
         return {
             "plan": plan,
+            "profile": profile if profile else {"status": "missing", "skills": [], "experience": [], "projects": []},
             "status": "running",
-            "events": [_event("orchestrator", "completed", "Created task plan")],
+            "events": [_event("orchestrator", "completed", "Created task plan and loaded profile preferences")],
             "errors": [],
         }
 
@@ -143,16 +158,11 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
             }
 
     async def resume_intelligence(state: CareerState) -> dict[str, Any]:
-        profile = {}
-        if profile_loader is not None:
-            try:
-                profile = await profile_loader()
-            except Exception:
-                logger.exception("CareerPilot profile loading failed")
-        if not profile:
+        profile = state.get("profile", {})
+        if not profile or profile.get("status") == "missing":
             return {
                 "profile": {"status": "missing", "skills": [], "experience": [], "projects": []},
-                "events": [_event("resume_intelligence", "needs_input", "Upload a resume or complete the candidate profile")],
+                "events": [_event("resume_intelligence", "needs_input", "Complete the candidate profile or upload a resume")],
             }
         return {
             "profile": profile,
