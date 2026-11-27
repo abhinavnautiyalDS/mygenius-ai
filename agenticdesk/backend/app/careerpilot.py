@@ -230,7 +230,7 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
             event = _event("resume_optimization", "completed", "Generated review-only preparation draft")
             outreach_event = _event("outreach_drafting", "completed", "Outreach drafts included for review")
             interview_event = _event("interview_preparation", "skipped", "Interview prep will run after a role is selected")
-            return {"artifacts": artifacts, "events": [event, outreach_event, interview_event], "agent_events": {\n                "resume_optimization": event, "outreach_drafting": outreach_event, "interview_preparation": interview_event}}
+            return {"artifacts": artifacts, "events": [event, outreach_event, interview_event], "agent_events": {"resume_optimization": event, "outreach_drafting": outreach_event, "interview_preparation": interview_event}}
         except Exception as exc:
             logger.exception("CareerPilot preparation failed")
             return {
