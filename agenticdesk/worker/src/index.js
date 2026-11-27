@@ -19,6 +19,8 @@ const ROUTES = [
   /^\/api\/v1\/approvals$/,
   new RegExp("^/api/v1/approvals/" + UUID + "/(approve|reject)$"),
   /^\/api\/v1\/workflows$/,
+  /^\/api\/v1\/career\/profile$/,
+  /^\/api\/v1\/career\/runs$/,
 ];
 
 function allowedPath(path) {
