@@ -84,8 +84,6 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
             if not isinstance(plan, dict):
                 raise ValueError("Planner output must be an object")
         except (ValueError, TypeError, json.JSONDecodeError):
-            # Conservative fallback: retain the user instruction and do not
-            # guess salary, experience, or qualifications.
             plan = {
                 "job_titles": [],
                 "locations": [],
@@ -95,28 +93,30 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
                 "skills": [],
                 "constraints": [],
                 "raw_goal": state["task"],
-                "planner_note": "Could not parse structured plan; preserved original goal.",
+                "planner_note": "Structured planning unavailable; original goal preserved.",
             }
+
         profile = (await profile_loader()) if profile_loader is not None else {}
-        if not isinstance(profile, dict):
-            profile = {}
-        # The saved candidate profile is the source of truth for preferences;
-        # natural-language constraints from this task take precedence.
-        for key in ("job_titles", "locations", "salary_min_lpa", "salary_max_lpa", "skills"):
-            profile_key = {
-                "job_titles": "preferred_roles",
-                "locations": "preferred_locations",
-            }.get(key, key)
+        profile = profile if isinstance(profile, dict) else {}
+        for key, profile_key in (
+            ("job_titles", "preferred_roles"),
+            ("locations", "preferred_locations"),
+            ("salary_min_lpa", "salary_min_lpa"),
+            ("salary_max_lpa", "salary_max_lpa"),
+            ("skills", "skills"),
+        ):
             value = profile.get(profile_key)
             if value not in (None, "", []):
-                if key not in plan or plan.get(key) in (None, "", []):
+                if plan.get(key) in (None, "", []):
                     plan[key] = value
+
+        event = _event("orchestrator", "completed", "Created plan and loaded candidate preferences")
         return {
             "plan": plan,
             "profile": profile if profile else {"status": "missing", "skills": [], "experience": [], "projects": []},
             "status": "running",
-            "events": [_event("orchestrator", "completed", "Created task plan and loaded profile preferences")],
-            "agent_events": {"orchestrator": _event("orchestrator", "completed", "Created task plan and loaded profile preferences")},
+            "events": [event],
+            "agent_events": {"orchestrator": event},
             "errors": [],
         }
 
