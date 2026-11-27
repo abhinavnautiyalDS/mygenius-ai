@@ -720,6 +720,7 @@ async def create_workflow(payload: WorkflowPayload):
             "status": graph_result["status"],
             "result": result,
             "events": graph_result["events"],
+            "agents": graph_result["agents"],
             "agent_count": graph_result["agent_count"],
             "created_at": stamp,
         }
