@@ -12,11 +12,28 @@ import logging
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Any, TypedDict
+from typing import Annotated, Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
 logger = logging.getLogger("agenticdesk.careerpilot")
+
+def _merge_events(left: list[dict[str, Any]] | None, right: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    return (left or []) + (right or [])
+
+
+def _merge_agent_events(
+    left: dict[str, dict[str, Any]] | None,
+    right: dict[str, dict[str, Any]] | None,
+) -> dict[str, dict[str, Any]]:
+    merged = dict(left or {})
+    merged.update(right or {})
+    return merged
+
+
+def _merge_errors(left: list[str] | None, right: list[str] | None) -> list[str]:
+    return (left or []) + (right or [])
+
 
 AGENTS = (
     "job_discovery",
@@ -34,15 +51,15 @@ class CareerState(TypedDict, total=False):
     task: str
     options: dict[str, bool]
     plan: dict[str, Any]
-    events: list[dict[str, Any]]
-    agent_events: dict[str, dict[str, Any]]
+    events: Annotated[list[dict[str, Any]], _merge_events]
+    agent_events: Annotated[dict[str, dict[str, Any]], _merge_agent_events]
     profile: dict[str, Any]
     jobs: list[dict[str, Any]]
     research: list[dict[str, Any]]
     skill_gaps: list[str]
     matches: list[dict[str, Any]]
     artifacts: dict[str, Any]
-    errors: list[str]
+    errors: Annotated[list[str], _merge_errors]
     status: str
     result: str
 
