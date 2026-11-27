@@ -8,21 +8,21 @@ AgenticDesk is a self-hosted agent workspace built alongside MyGenius AI. It com
 - Knowledge base: PDF, DOCX, TXT and Markdown ingestion, chunking, Granite embeddings (384 dimensions), similarity retrieval and source metadata.
 - MCP integrations: register HTTP JSON-RPC MCP endpoints, discover tools, queue tool calls for approval, and execute only after approval.
 - Approvals: inspect proposed tool arguments and explicitly approve or reject each pending call.
-- Workflows: submit a task to the reasoning model and retain an execution record.
+- Workflows / CareerPilot: LangGraph-powered job-search workflow with parallel research/profile branches, dependent job matching, parallel resume/outreach/interview preparation, and per-agent status output.
 - Capabilities: backend-reported status for model, retrieval, MCP and web search configuration.
 
 ## Implementation status
 
 The integration branch now includes the FastAPI workspace routes, SQLite conversation memory migration, Qwen chat client, Granite document embeddings and cosine retrieval, optional Tavily research, HTTP JSON-RPC MCP discovery, approval-gated tool execution, workflow run history, Cloudflare Worker source, tests, and EC2 deployment templates. Read [the A-to-Z plan](docs/AGENTICDESK_A_TO_Z_MASTER_PLAN.md), [implementation checklist](docs/IMPLEMENTATION_CHECKLIST.md), [local development guide](docs/LOCAL_DEVELOPMENT.md), and [EC2 connect-only runbook](deploy/EC2_CONNECT.md).
 
-**Important limitations:** the MCP adapter is a narrow HTTP JSON-RPC implementation and may need session negotiation for some servers; SSRF protection should be reinforced with network egress controls and DNS pinning; SQLite cosine search is for a small demo corpus; workflow runs are single Qwen tasks; the stream route chunks the completed response rather than streaming model tokens; shared gateway auth is not per-user authentication. Run the test suite and complete the release checklist before production deployment.
+**Important limitations:** CareerPilot is an initial execution foundation. Job discovery uses optional Tavily web search and returns unverified leads, not confirmed vacancies. Greenhouse/Lever/Ashby adapters, resume-file-to-profile extraction, Granite semantic job reranking, dedicated company research, and application submission are not connected yet. Resume/outreach/interview outputs are drafts only. The MCP adapter is a narrow HTTP JSON-RPC implementation and may need session negotiation for some servers; SSRF protection should be reinforced with network egress controls and DNS pinning; SQLite cosine search is for a small demo corpus; the stream route chunks the completed response rather than streaming model tokens; shared gateway auth is not per-user authentication. Run the test suite and complete the release checklist before production deployment.
 
 ## Architecture
 - Frontend: React 18, TypeScript, Vite, lucide-react.
 - API: FastAPI, Pydantic Settings, HTTPX.
 - Reasoning: existing private Qwen-compatible endpoint (/v1/chat/completions).
 - Embeddings: existing IBM Granite Embedding 97M Multilingual R2 endpoint (/v1/embeddings, 384 dimensions).
-- Storage: SQLite for conversations, messages, documents, MCP server registrations, approvals and workflow runs.
+- Storage: SQLite for conversations, messages, documents, MCP server registrations, approvals, workflow runs and the candidate profile.
 - Web search: Tavily API (optional).
 - MCP: HTTP JSON-RPC transport adapter with approval-gated tool execution.
 
@@ -62,6 +62,30 @@ Frontend:
     # Set VITE_API_BASE_URL=http://localhost:8000/api/v1 in frontend/.env.local
     npm run dev
 
+
+## CareerPilot multi-agent workflow
+
+The Workflows view is the initial job-search product surface. Save a candidate profile (skills, target roles, locations and salary range), describe a goal, and optionally enable Web Search.
+
+Current graph:
+- Orchestrator parses the goal and merges saved candidate preferences.
+- Parallel: job discovery, candidate profile loading and company research.
+- Sequential dependency: resume/profile analysis -> skill-gap analysis; job discovery + skill-gap analysis + company research -> matching.
+- Parallel after matching: resume optimization, recruiter outreach drafting and interview preparation.
+- Finalize merges agent outputs and returns each agent's status.
+
+The graph uses reducers for concurrent list, dictionary and artifact updates. The existing Dhir-compatible chat-completions wrapper is reused for reasoning; the existing Tavily integration is reused for opt-in web discovery. Granite remains available to the existing Knowledge Base and is not yet used for semantic job reranking.
+
+Candidate profile API:
+- GET /api/v1/career/profile
+- PUT /api/v1/career/profile
+
+Workflow API:
+- POST /api/v1/workflows with JSON body `{"message":"...","web_search":true}`
+- GET /api/v1/workflows
+
+All generated resume and outreach content is draft-only. No application is submitted and no recruiter message is sent by CareerPilot. Job links from general web search are leads and require manual verification. Do not treat them as verified vacancies.
+
 ## API surface
 - GET /api/v1/health and /api/v1/capabilities
 - GET /api/v1/conversations and /api/v1/conversations/{id}
@@ -70,6 +94,7 @@ Frontend:
 - GET/POST /api/v1/mcp/servers and GET /api/v1/mcp/servers/{id}/tools
 - POST /api/v1/mcp/servers/{id}/tools/{tool}/request
 - GET /api/v1/approvals and POST /api/v1/approvals/{id}/approve or reject
+- GET/PUT /api/v1/career/profile
 - POST/GET /api/v1/workflows
 
 ## Important integration notes

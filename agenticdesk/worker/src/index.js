@@ -19,6 +19,8 @@ const ROUTES = [
   /^\/api\/v1\/approvals$/,
   new RegExp("^/api/v1/approvals/" + UUID + "/(approve|reject)$"),
   /^\/api\/v1\/workflows$/,
+  /^\/api\/v1\/career\/profile$/,
+  /^\/api\/v1\/career\/runs$/,
 ];
 
 function allowedPath(path) {
@@ -27,7 +29,7 @@ function allowedPath(path) {
 
 function corsHeaders(origin) {
   const headers = new Headers({
-    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
@@ -47,7 +49,7 @@ export default {
     if (origin && !ALLOWED_ORIGINS.has(origin)) {
       return new Response("Origin not allowed", { status: 403, headers });
     }
-    if (!["GET", "POST", "DELETE", "OPTIONS"].includes(request.method)) {
+    if (!["GET", "POST", "PUT", "DELETE", "OPTIONS"].includes(request.method)) {
       return new Response("Method not allowed", { status: 405, headers });
     }
     if (!allowedPath(incoming.pathname)) {
@@ -81,7 +83,7 @@ export default {
       const response = await fetch(upstream, {
         method: request.method,
         headers: upstreamHeaders,
-        body: request.method === "GET" ? undefined : request.body,
+        body: ["GET", "OPTIONS"].includes(request.method) ? undefined : request.body,
         redirect: "manual",
       });
       const responseHeaders = new Headers(response.headers);

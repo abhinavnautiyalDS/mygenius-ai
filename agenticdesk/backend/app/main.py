@@ -51,7 +51,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[x.strip() for x in settings.cors_origins.split(",") if x.strip()],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "x-agenticdesk-token"],
 )
 
@@ -103,6 +103,9 @@ def init_db() -> None:
           arguments TEXT NOT NULL, status TEXT NOT NULL, result TEXT,
           created_at TEXT NOT NULL, reviewed_at TEXT
         );
+        CREATE TABLE IF NOT EXISTS app_settings(
+          key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS workflow_runs(
           id TEXT PRIMARY KEY, task TEXT NOT NULL, status TEXT NOT NULL,
           result TEXT, created_at TEXT NOT NULL, updated_at TEXT
@@ -146,6 +149,22 @@ class ServerPayload(BaseModel):
 
 class WorkflowPayload(BaseModel):
     message: str = Field(min_length=1, max_length=12000)
+    web_search: bool = False
+
+
+
+
+class CareerProfilePayload(BaseModel):
+    full_name: str = Field(default="", max_length=160)
+    headline: str = Field(default="", max_length=300)
+    skills: list[str] = Field(default_factory=list, max_length=100)
+    experience: list[dict[str, Any]] = Field(default_factory=list, max_length=30)
+    projects: list[dict[str, Any]] = Field(default_factory=list, max_length=30)
+    education: list[dict[str, Any]] = Field(default_factory=list, max_length=20)
+    preferred_roles: list[str] = Field(default_factory=list, max_length=30)
+    preferred_locations: list[str] = Field(default_factory=list, max_length=30)
+    salary_min_lpa: float | None = Field(default=None, ge=0, le=500)
+    salary_max_lpa: float | None = Field(default=None, ge=0, le=500)
 
 
 class ToolPayload(BaseModel):
@@ -632,6 +651,34 @@ async def reject_tool(approval_id: str):
     return await review_approval(approval_id, False)
 
 
+
+
+@app.get("/api/v1/career/profile")
+async def get_career_profile():
+    with db() as conn:
+        row = conn.execute("SELECT value FROM app_settings WHERE key='career_profile'").fetchone()
+    return {"profile": json.loads(row["value"]) if row else None}
+
+
+@app.put("/api/v1/career/profile")
+async def save_career_profile(payload: CareerProfilePayload):
+    profile = payload.model_dump()
+    # Keep the candidate profile in the existing persistent SQLite database.
+    with db() as conn:
+        conn.execute(
+            "INSERT INTO app_settings(key,value,updated_at) VALUES('career_profile',?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at",
+            (json.dumps(profile, ensure_ascii=False), now()),
+        )
+    return {"saved": True, "profile": profile}
+
+
+async def load_career_profile() -> dict[str, Any]:
+    with db() as conn:
+        row = conn.execute("SELECT value FROM app_settings WHERE key='career_profile'").fetchone()
+    return json.loads(row["value"]) if row else {}
+
+
 @app.get("/api/v1/workflows")
 async def list_workflows():
     with db() as conn:
@@ -641,21 +688,48 @@ async def list_workflows():
 
 @app.post("/api/v1/workflows")
 async def create_workflow(payload: WorkflowPayload):
+    """Create a persisted CareerPilot multi-agent run.
+
+    Legacy callers may keep sending {message}; web_search is opt-in.
+    """
     run_id, stamp = str(uuid.uuid4()), now()
     with db() as conn:
-        conn.execute("INSERT INTO workflow_runs(id,task,status,result,created_at,updated_at) VALUES(?,?,?,?,?,?)",
-                     (run_id, payload.message, "running", None, stamp, stamp))
+        conn.execute(
+            "INSERT INTO workflow_runs(id,task,status,result,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+            (run_id, payload.message, "running", None, stamp, stamp),
+        )
     try:
-        result = await qwen_chat([
-            {"role": "system", "content": "You are AgenticDesk workflow executor. Complete the user's bounded task. Do not claim to have performed external actions or used tools unless actually done."},
-            {"role": "user", "content": payload.message}
-        ])
+        from .careerpilot import run_career_workflow
+
+        graph_result = await run_career_workflow(
+            payload.message,
+            model_call=qwen_chat,
+            web_search_call=web_research,
+            web_search=payload.web_search,
+            profile_loader=load_career_profile,
+        )
+        result = graph_result["result"]
         with db() as conn:
-            conn.execute("UPDATE workflow_runs SET status='completed',result=?,updated_at=? WHERE id=?",
-                         (result, now(), run_id))
-        return {"id": run_id, "task": payload.message, "status": "completed", "result": result, "created_at": stamp}
+            conn.execute(
+                "UPDATE workflow_runs SET status=?,result=?,updated_at=? WHERE id=?",
+                (graph_result["status"], result, now(), run_id),
+            )
+        return {
+            "id": run_id,
+            "task": payload.message,
+            "status": graph_result["status"],
+            "result": result,
+            "events": graph_result["events"],
+            "agents": graph_result["agents"],
+            "agent_count": graph_result["agent_count"],
+            "created_at": stamp,
+        }
     except Exception as exc:
         with db() as conn:
-            conn.execute("UPDATE workflow_runs SET status='failed',result=?,updated_at=? WHERE id=?",
-                         (str(exc)[:2000], now(), run_id))
+            conn.execute(
+                "UPDATE workflow_runs SET status='failed',result=?,updated_at=? WHERE id=?",
+                (str(exc)[:2000], now(), run_id),
+            )
         raise
+
+
