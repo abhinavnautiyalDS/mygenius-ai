@@ -244,23 +244,24 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
     async def finalize(state: CareerState) -> dict[str, Any]:
         summary = {
             "plan": state.get("plan", {}),
-            "profile_status": state.get("profile", {}).get("status", "unknown"),
-            "jobs_discovered": len(state.get("jobs", [])),
+            "profile_status": state.get("profile", {}).get("status", "available"),
+            "job_leads_discovered": len(state.get("jobs", [])),
             "matches_prepared": len(state.get("matches", [])),
             "skill_gaps": state.get("skill_gaps", []),
             "artifacts": state.get("artifacts", {}),
             "errors": state.get("errors", []),
             "execution_note": (
-                "This run does not submit job applications or send messages. "
-                "Listings from general web search are leads, not verified vacancies. "
-                "Use supported employer/ATS sources and obtain approval before external actions."
+                "No application was submitted and no recruiter message was sent. "
+                "General web search results are leads, not verified vacancies. "
+                "Review all generated drafts before using them."
             ),
         }
+        event = _event("orchestrator", "completed", "Merged agent outputs")
         return {
             "result": json.dumps(summary, ensure_ascii=False, indent=2),
             "status": "completed_with_warnings" if state.get("errors") else "completed",
-            "events": [_event("orchestrator", "completed", "Merged agent outputs")],
-            "agent_events": {"orchestrator": _event("orchestrator", "completed", "Merged agent outputs")},
+            "events": [event],
+            "agent_events": {"orchestrator": event},
         }
 
     graph = StateGraph(CareerState)
