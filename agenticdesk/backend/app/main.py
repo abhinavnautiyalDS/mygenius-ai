@@ -146,6 +146,7 @@ class ServerPayload(BaseModel):
 
 class WorkflowPayload(BaseModel):
     message: str = Field(min_length=1, max_length=12000)
+    web_search: bool = False
 
 
 class ToolPayload(BaseModel):
