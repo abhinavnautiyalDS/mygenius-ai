@@ -230,47 +230,70 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
         event = _event("job_matching", "completed", f"Ranked {len(ranked[:20])} job leads by skill mentions")
         return {"matches": ranked[:20], "events": [event], "agent_events": {"job_matching": event}}
 
-    async def preparation(state: CareerState) -> dict[str, Any]:
-        # Draft-only output. No applications or messages are sent.
+    async def resume_optimization(state: CareerState) -> dict[str, Any]:
         payload = {
             "candidate_profile": state.get("profile", {}),
             "job_matches": state.get("matches", [])[:5],
             "goal": state.get("plan", {}),
         }
         prompt = (
-            "Prepare career application drafts using only the supplied candidate facts "
-            "and job information. Never invent employers, dates, degrees, skills, "
-            "achievements, metrics or experience. Clearly mark missing facts as "
-            "questions/placeholders. Return concise JSON with resume_guidance, "
-            "cover_letter_drafts and recruiter_message_drafts."
+            "Act as a resume optimization specialist. Tailor resume guidance to the "
+            "supplied role and candidate profile. Never invent skills, employers, "
+            "dates, qualifications, metrics or achievements. Mark missing details "
+            "as placeholders. Return concise JSON with resume_guidance and "
+            "role_specific_keywords."
         )
         try:
-            raw = await _call_model(model_call, prompt, json.dumps(payload, ensure_ascii=False), 1100)
-            resume_event = _event("resume_optimization", "completed", "Generated review-only resume guidance")
-            outreach_event = _event("outreach_drafting", "completed", "Generated recruiter message drafts for review")
-            interview_event = _event("interview_preparation", "skipped", "Interview preparation starts after a job is selected")
-            return {
-                "artifacts": {"preparation_draft": raw, "requires_user_review": True},
-                "events": [resume_event, outreach_event, interview_event],
-                "agent_events": {
-                    "resume_optimization": resume_event,
-                    "outreach_drafting": outreach_event,
-                    "interview_preparation": interview_event,
-                },
-            }
+            raw = await _call_model(model_call, prompt, json.dumps(payload, ensure_ascii=False), 750)
+            event = _event("resume_optimization", "completed", "Generated role-focused resume guidance for review")
+            return {"artifacts": {"resume_guidance": raw}, "events": [event], "agent_events": {"resume_optimization": event}}
         except Exception as exc:
-            logger.exception("CareerPilot preparation failed")
-            event = _event("resume_optimization", "failed", "Could not prepare application drafts")
-            return {
-                "artifacts": {},
-                "errors": [f"preparation: {type(exc).__name__}"],
-                "events": [event],
-                "agent_events": {
-                    "resume_optimization": event,
-                    "outreach_drafting": _event("outreach_drafting", "skipped", "Preparation dependency failed"),
-                    "interview_preparation": _event("interview_preparation", "skipped", "Preparation dependency failed"),
-                },
-            }
+            logger.exception("CareerPilot resume optimization failed")
+            event = _event("resume_optimization", "failed", "Could not generate resume guidance")
+            return {"errors": [f"resume_optimization: {type(exc).__name__}"], "events": [event], "agent_events": {"resume_optimization": event}}
+
+    async def outreach_drafting(state: CareerState) -> dict[str, Any]:
+        payload = {
+            "candidate_profile": state.get("profile", {}),
+            "job_matches": state.get("matches", [])[:5],
+            "goal": state.get("plan", {}),
+        }
+        prompt = (
+            "Act as a recruiter outreach specialist. Draft concise, personalized "
+            "recruiter messages and cover letters using only supplied candidate "
+            "facts and job information. Do not invent contact names, experience "
+            "or achievements. Return JSON with cover_letter_drafts and "
+            "recruiter_message_drafts. Draft only; do not send anything."
+        )
+        try:
+            raw = await _call_model(model_call, prompt, json.dumps(payload, ensure_ascii=False), 750)
+            event = _event("outreach_drafting", "completed", "Generated recruiter outreach drafts for review")
+            return {"artifacts": {"outreach_drafts": raw}, "events": [event], "agent_events": {"outreach_drafting": event}}
+        except Exception as exc:
+            logger.exception("CareerPilot outreach drafting failed")
+            event = _event("outreach_drafting", "failed", "Could not generate outreach drafts")
+            return {"errors": [f"outreach_drafting: {type(exc).__name__}"], "events": [event], "agent_events": {"outreach_drafting": event}}
+
+    async def interview_preparation(state: CareerState) -> dict[str, Any]:
+        matches = state.get("matches", [])
+        if not matches:
+            event = _event("interview_preparation", "needs_input", "Select a suitable job before role-specific interview preparation")
+            return {"events": [event], "agent_events": {"interview_preparation": event}}
+        payload = {"job_matches": matches[:3], "candidate_profile": state.get("profile", {})}
+        prompt = (
+            "Act as an interview preparation coach. Create likely role-relevant "
+            "interview topics and practice questions from the supplied job lead "
+            "and candidate profile. Distinguish inferred questions from confirmed "
+            "company interview questions. Return concise JSON."
+        )
+        try:
+            raw = await _call_model(model_call, prompt, json.dumps(payload, ensure_ascii=False), 750)
+            event = _event("interview_preparation", "completed", "Generated practice questions, not confirmed company questions")
+            return {"artifacts": {"interview_preparation": raw}, "events": [event], "agent_events": {"interview_preparation": event}}
+        except Exception as exc:
+            logger.exception("CareerPilot interview preparation failed")
+            event = _event("interview_preparation", "failed", "Could not generate interview preparation")
+            return {"errors": [f"interview_preparation: {type(exc).__name__}"], "events": [event], "agent_events": {"interview_preparation": event}}
 
     async def finalize(state: CareerState) -> dict[str, Any]:
         summary = {
@@ -280,6 +303,7 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
             "matches_prepared": len(state.get("matches", [])),
             "skill_gaps": state.get("skill_gaps", []),
             "artifacts": state.get("artifacts", {}),
+            "requires_user_review": True,
             "errors": state.get("errors", []),
             "execution_note": (
                 "No application was submitted and no recruiter message was sent. "
@@ -302,7 +326,9 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
     graph.add_node("company_research", company_research)
     graph.add_node("skill_gap_analysis", skill_gap_analysis)
     graph.add_node("job_matching", job_matching)
-    graph.add_node("preparation", preparation)
+    graph.add_node("resume_optimization", resume_optimization)
+    graph.add_node("outreach_drafting", outreach_drafting)
+    graph.add_node("interview_preparation", interview_preparation)
     graph.add_node("finalize", finalize)
 
     graph.add_edge(START, "orchestrator")
@@ -313,8 +339,10 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
     graph.add_edge("orchestrator", "company_research")
     graph.add_edge("resume_intelligence", "skill_gap_analysis")
     graph.add_edge(["job_discovery", "skill_gap_analysis", "company_research"], "job_matching")
-    graph.add_edge("job_matching", "preparation")
-    graph.add_edge("preparation", "finalize")
+    graph.add_edge("job_matching", "resume_optimization")
+    graph.add_edge("job_matching", "outreach_drafting")
+    graph.add_edge("job_matching", "interview_preparation")
+    graph.add_edge(["resume_optimization", "outreach_drafting", "interview_preparation"], "finalize")
     graph.add_edge("finalize", END)
     return graph.compile()
 
