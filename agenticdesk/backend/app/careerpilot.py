@@ -124,38 +124,47 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
         if not state.get("options", {}).get("web_search", False) or web_search_call is None:
             event = _event("job_discovery", "skipped", "Web search disabled or provider unavailable")
             return {"jobs": [], "events": [event], "agent_events": {"job_discovery": event}}
+
         plan = state.get("plan", {})
         terms = plan.get("job_titles") or [state["task"]]
         locations = plan.get("locations") or []
         queries = [f'{title} jobs {" ".join(locations)} India' for title in terms[:5]]
         try:
-            batches = await asyncio.gather(*(web_search_call(q) for q in queries))
+            batches = await asyncio.gather(*(web_search_call(query) for query in queries))
             results: list[dict[str, Any]] = []
             for batch in batches:
                 for item in batch or []:
                     url = str(item.get("url", "")).strip()
                     title = str(item.get("title", "")).strip()
-                    if url and title:
-                        results.append({
-                            "title": title[:300],
-                            "url": url[:2000],
-                            "snippet": str(item.get("content", ""))[:1200],
-                            "source": "web_search",
-                            "verified_at": datetime.now(timezone.utc).isoformat(),
-                        })
+                    if not url or not title:
+                        continue
+                    results.append({
+                        "title": title[:300],
+                        "url": url[:2000],
+                        "snippet": str(item.get("content", ""))[:1200],
+                        "source": "web_search",
+                        "listing_verified": False,
+                        "retrieved_at": datetime.now(timezone.utc).isoformat(),
+                    })
             unique = {item["url"]: item for item in results}
-            event = _event("job_discovery", "completed", f"Collected {len(unique)} web results; listings require verification")
+            event = _event("job_discovery", "completed", f"Collected {len(unique)} web leads; vacancy status not verified")
             return {"jobs": list(unique.values())[:40], "events": [event], "agent_events": {"job_discovery": event}}
         except Exception as exc:
             logger.exception("CareerPilot job discovery failed")
             event = _event("job_discovery", "failed", "Search provider request failed")
-            return {"jobs": [], "errors": [f"job_discovery: {type(exc).__name__}"], "events": [event], "agent_events": {"job_discovery": event}}
+            return {
+                "jobs": [],
+                "errors": [f"job_discovery: {type(exc).__name__}"],
+                "events": [event],
+                "agent_events": {"job_discovery": event},
+            }
 
     async def resume_intelligence(state: CareerState) -> dict[str, Any]:
         profile = state.get("profile", {})
         if not profile or profile.get("status") == "missing":
             event = _event("resume_intelligence", "needs_input", "Complete the candidate profile or upload a resume")
-            return {"profile": {"status": "missing", "skills": [], "experience": [], "projects": []}, "events": [event], "agent_events": {"resume_intelligence": event}}
+            empty_profile = {"status": "missing", "skills": [], "experience": [], "projects": []}
+            return {"profile": empty_profile, "events": [event], "agent_events": {"resume_intelligence": event}}
         event = _event("resume_intelligence", "completed", "Loaded candidate profile")
         return {"profile": profile, "events": [event], "agent_events": {"resume_intelligence": event}}
 
