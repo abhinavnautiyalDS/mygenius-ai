@@ -117,17 +117,13 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
             "status": "running",
             "events": [_event("orchestrator", "completed", "Created task plan and loaded profile preferences")],
             "agent_events": {"orchestrator": _event("orchestrator", "completed", "Created task plan and loaded profile preferences")},
-            "agent_events": {"orchestrator": _event("orchestrator", "completed", "Created task plan and loaded profile preferences")},
             "errors": [],
         }
 
     async def job_discovery(state: CareerState) -> dict[str, Any]:
         if not state.get("options", {}).get("web_search", False) or web_search_call is None:
-            return {
-                "jobs": [],
-                "events": [_event("job_discovery", "skipped", "Web search disabled or provider unavailable")],
-                "agent_events": {"job_discovery": _event("job_discovery", "skipped", "Web search disabled or provider unavailable")},
-            }
+            event = _event("job_discovery", "skipped", "Web search disabled or provider unavailable")
+            return {"jobs": [], "events": [event], "agent_events": {"job_discovery": event}}
         plan = state.get("plan", {})
         terms = plan.get("job_titles") or [state["task"]]
         locations = plan.get("locations") or []
@@ -148,11 +144,8 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
                             "verified_at": datetime.now(timezone.utc).isoformat(),
                         })
             unique = {item["url"]: item for item in results}
-            return {
-                "jobs": list(unique.values())[:40],
-                "events": [_event("job_discovery", "completed", f"Collected {len(unique)} web results; listings require verification")],
-                "agent_events": {"job_discovery": _event("job_discovery", "completed", f"Collected {len(unique)} web results; listings require verification")},
-            }
+            event = _event("job_discovery", "completed", f"Collected {len(unique)} web results; listings require verification")
+            return {"jobs": list(unique.values())[:40], "events": [event], "agent_events": {"job_discovery": event}}
         except Exception as exc:
             logger.exception("CareerPilot job discovery failed")
             return {
@@ -179,20 +172,15 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
     async def company_research(state: CareerState) -> dict[str, Any]:
         # This node is independent and can later call approved company-data tools.
         # It never invents employer facts in the absence of sources.
-        return {
-            "research": [],
-            "events": [_event("company_research", "skipped", "No company research provider configured yet")],
-        }
+        event = _event("company_research", "skipped", "No company research provider configured yet")
+        return {"research": [], "events": [event], "agent_events": {"company_research": event}}
 
     async def skill_gap_analysis(state: CareerState) -> dict[str, Any]:
         plan_skills = {str(x).casefold() for x in state.get("plan", {}).get("skills", [])}
         profile_skills = {str(x).casefold() for x in state.get("profile", {}).get("skills", [])}
         gaps = sorted(plan_skills - profile_skills) if profile_skills else []
-        return {
-            "skill_gaps": gaps,
-            "events": [_event("skill_gap_analysis", "completed" if profile_skills else "needs_input",
-                              f"Identified {len(gaps)} potential skill gaps" if profile_skills else "Candidate profile is not available")],
-        }
+        event = _event("skill_gap_analysis", "completed" if profile_skills else "needs_input", f"Identified {len(gaps)} potential skill gaps" if profile_skills else "Candidate profile is not available")
+        return {"skill_gaps": gaps, "events": [event], "agent_events": {"skill_gap_analysis": event}}
 
     async def job_matching(state: CareerState) -> dict[str, Any]:
         jobs = state.get("jobs", [])
@@ -201,7 +189,6 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
             return {
                 "matches": [],
                 "events": [_event("job_matching", "needs_input", "Requires discovered listings and a candidate profile")],
-                "agent_events": {"job_matching": _event("job_matching", "needs_input", "Requires discovered listings and a candidate profile")},
                 "agent_events": {"job_matching": _event("job_matching", "needs_input", "Requires discovered listings and a candidate profile")},
             }
         # Initial conservative lexical signal only. Do not present this as an
@@ -250,7 +237,6 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
                 "artifacts": {},
                 "errors": [f"preparation: {type(exc).__name__}"],
                 "events": [_event("resume_optimization", "failed", "Could not prepare drafts")],
-                "agent_events": {"resume_optimization": _event("resume_optimization", "failed", "Could not prepare drafts")},
                 "agent_events": {"resume_optimization": _event("resume_optimization", "failed", "Could not prepare drafts")},
             }
 
