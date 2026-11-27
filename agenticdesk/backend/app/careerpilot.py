@@ -259,6 +259,7 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
             "result": json.dumps(summary, ensure_ascii=False, indent=2),
             "status": "completed_with_warnings" if state.get("errors") else "completed",
             "events": [_event("orchestrator", "completed", "Merged agent outputs")],
+            "agent_events": {"orchestrator": _event("orchestrator", "completed", "Merged agent outputs")},
         }
 
     graph = StateGraph(CareerState)
