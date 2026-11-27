@@ -35,6 +35,12 @@ def _merge_errors(left: list[str] | None, right: list[str] | None) -> list[str]:
     return (left or []) + (right or [])
 
 
+def _merge_artifacts(left: dict[str, Any] | None, right: dict[str, Any] | None) -> dict[str, Any]:
+    merged = dict(left or {})
+    merged.update(right or {})
+    return merged
+
+
 AGENTS = (
     "job_discovery",
     "resume_intelligence",
@@ -58,7 +64,7 @@ class CareerState(TypedDict, total=False):
     research: list[dict[str, Any]]
     skill_gaps: list[str]
     matches: list[dict[str, Any]]
-    artifacts: dict[str, Any]
+    artifacts: Annotated[dict[str, Any], _merge_artifacts]
     errors: Annotated[list[str], _merge_errors]
     status: str
     result: str
