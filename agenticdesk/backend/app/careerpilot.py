@@ -117,6 +117,7 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
             "status": "running",
             "events": [_event("orchestrator", "completed", "Created task plan and loaded profile preferences")],
             "agent_events": {"orchestrator": _event("orchestrator", "completed", "Created task plan and loaded profile preferences")},
+            "agent_events": {"orchestrator": _event("orchestrator", "completed", "Created task plan and loaded profile preferences")},
             "errors": [],
         }
 
@@ -125,6 +126,7 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
             return {
                 "jobs": [],
                 "events": [_event("job_discovery", "skipped", "Web search disabled or provider unavailable")],
+                "agent_events": {"job_discovery": _event("job_discovery", "skipped", "Web search disabled or provider unavailable")},
             }
         plan = state.get("plan", {})
         terms = plan.get("job_titles") or [state["task"]]
@@ -149,6 +151,7 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
             return {
                 "jobs": list(unique.values())[:40],
                 "events": [_event("job_discovery", "completed", f"Collected {len(unique)} web results; listings require verification")],
+                "agent_events": {"job_discovery": _event("job_discovery", "completed", f"Collected {len(unique)} web results; listings require verification")},
             }
         except Exception as exc:
             logger.exception("CareerPilot job discovery failed")
@@ -199,6 +202,7 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
                 "matches": [],
                 "events": [_event("job_matching", "needs_input", "Requires discovered listings and a candidate profile")],
                 "agent_events": {"job_matching": _event("job_matching", "needs_input", "Requires discovered listings and a candidate profile")},
+                "agent_events": {"job_matching": _event("job_matching", "needs_input", "Requires discovered listings and a candidate profile")},
             }
         # Initial conservative lexical signal only. Do not present this as an
         # ML relevance score; a proper reranker can be added after evaluation.
@@ -246,6 +250,7 @@ def build_career_graph(model_call, web_search_call=None, profile_loader=None):
                 "artifacts": {},
                 "errors": [f"preparation: {type(exc).__name__}"],
                 "events": [_event("resume_optimization", "failed", "Could not prepare drafts")],
+                "agent_events": {"resume_optimization": _event("resume_optimization", "failed", "Could not prepare drafts")},
                 "agent_events": {"resume_optimization": _event("resume_optimization", "failed", "Could not prepare drafts")},
             }
 
@@ -310,6 +315,7 @@ async def run_career_workflow(
         "options": {"web_search": web_search},
         "status": "queued",
         "events": [],
+        "agent_events": {name: _event(name, "queued", "Waiting for dependencies") for name in AGENTS},
         "errors": [],
     }
     final = await graph.ainvoke(initial)
