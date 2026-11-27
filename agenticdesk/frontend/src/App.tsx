@@ -9,7 +9,7 @@ type Conversation = { id: string; title: string; updated_at: string };
 type DocumentItem = { id: string; filename: string; characters: number; chunks: number; created_at: string };
 type ServerItem = { id: string; name: string; url: string; enabled: number };
 type Approval = { id: string; server_name: string; tool_name: string; arguments: string; status: string; created_at: string };
-type WorkflowItem = { id: string; task: string; status: string; result: string; created_at: string; events?: AgentEvent[]; agent_count?: number };
+type WorkflowItem = { id: string; task: string; status: string; result: string; created_at: string; events?: AgentEvent[]; agents?: Record<string, AgentEvent>; agent_count?: number };
 type AgentEvent = { id: string; agent: string; status: string; detail: string; timestamp: string };
 type CareerProfile = { full_name: string; headline: string; skills: string; preferred_roles: string; preferred_locations: string; salary_min_lpa: string; salary_max_lpa: string };
 
@@ -139,7 +139,7 @@ export default function App() {
     setBusy(true); setError(""); setActiveWorkflow(null);
     try {
       const data = await api("/workflows", { ...json({ message: task, web_search: workflowWeb }) });
-      const run: WorkflowItem = { ...data, events: data.events || [], agent_count: data.agent_count };
+      const run: WorkflowItem = { ...data, events: data.events || [], agents: data.agents || {}, agent_count: data.agent_count };
       setActiveWorkflow(run);
       setDraft("");
       await refresh();
@@ -194,7 +194,7 @@ export default function App() {
           <small className="muted-note">Web search results are leads, not verified vacancies. No job application or recruiter message is submitted by this workflow.</small>
         </div>
         {activeWorkflow && <div className="data-card"><div className="card-title"><h3>Latest execution · {activeWorkflow.agent_count || 0} agents</h3><span className={"status "+activeWorkflow.status}>{activeWorkflow.status}</span></div>
-          <div className="agent-event-list">{(activeWorkflow.events||[]).map(ev=><div className="agent-event" key={ev.id}><div className="agent-event-head"><b>{ev.agent.replaceAll("_"," ")}</b><span className={"status "+ev.status}>{ev.status.replaceAll("_"," ")}</span></div><small>{ev.detail}</small></div>)}</div>
+          <div className="agent-event-list">{Object.values(activeWorkflow.agents || {}).map(ev=><div className="agent-event" key={ev.id}><div className="agent-event-head"><b>{ev.agent.replaceAll("_"," ")}</b><span className={"status "+ev.status}>{ev.status.replaceAll("_"," ")}</span></div><small>{ev.detail}</small></div>)}</div>
           <details open><summary>Workflow result</summary><pre className="workflow-result">{activeWorkflow.result}</pre></details>
         </div>}
         <div className="data-card"><div className="card-title"><h3>Execution history</h3><span>{workflows.length} runs</span></div>{workflows.map(w=><div className="data-row" key={w.id}><Workflow size={18}/><div className="grow"><b>{w.task}</b><small>{w.status} · {new Date(w.created_at).toLocaleString()}</small></div><details><summary>Result</summary><pre>{w.result}</pre></details></div>)}{!workflows.length&&<div className="empty-state"><Workflow size={25}/><b>No workflow runs yet</b><p>Your task executions will be listed here.</p></div>}</div>
